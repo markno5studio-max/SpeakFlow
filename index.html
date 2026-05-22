@@ -304,7 +304,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
 /* ─── TRANSCRIPT LINES ─── */
 .tr-line{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:5px;margin-bottom:4px;transition:background .12s;}
 .tr-line:hover{background:rgba(255,255,255,.04);}
-.tr-tc{font-family:'SF Mono',Consolas,monospace;font-size:11px;color:var(--text-tertiary);white-space:nowrap;padding:3px 6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:4px;cursor:default;user-select:none;line-height:1.6;flex-shrink:0;}
+.tr-tc{font-family:'SF Mono',Consolas,monospace;font-size:11px;color:var(--tc-color,rgba(255,255,255,.45));white-space:nowrap;padding:3px 6px;background:var(--tc-bg,rgba(255,255,255,.05));border:1px solid var(--tc-border,rgba(255,255,255,.08));border-radius:4px;cursor:default;user-select:none;line-height:1.6;flex-shrink:0;}
 .tr-txt{flex:1;outline:none;line-height:1.8;border-bottom:1px solid transparent;transition:border-color .12s;}
 .tr-txt:focus{border-bottom-color:rgba(var(--primary-rgb),.4);}
 .tr-box{overflow-y:auto;}
@@ -469,7 +469,8 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             </div>
             <div id="geminiSection" style="display:none;">
                 <div id="apiKeyNotice" style="font-size:11.5px;color:var(--accent-red);padding:8px 12px;background:rgba(240,96,96,.08);border:1px solid rgba(240,96,96,.2);border-radius:var(--r-sm);margin-bottom:6px;display:none;">
-                    ⚠ 尚未設定 Gemini API 金鑰，請至後台設定中填入。
+                    ⚠ 尚未設定 Gemini API 金鑰。
+                    <span style="text-decoration:underline;cursor:pointer;margin-left:4px;" onclick="document.getElementById('settingsBtn').click()">點此前往後台設定填入 →</span>
                 </div>
             </div>
 
@@ -896,6 +897,26 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 </div>
                 <hr class="divider">
                 <div class="s-sec">
+                    <div class="s-lbl">逐字稿時間碼文字顏色</div>
+                    <div class="cpw" data-key="color_tc" data-default="#667799">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#667799">
+                        </div>
+                        <input type="text" class="cpw-hex" value="#667799" maxlength="7">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#667799" onclick="cpwPreset(this,'#667799')"></div>
+                            <div class="cpp" style="background:#4a7cf7" onclick="cpwPreset(this,'#4a7cf7')"></div>
+                            <div class="cpp" style="background:#22c97e" onclick="cpwPreset(this,'#22c97e')"></div>
+                            <div class="cpp" style="background:#d4a254" onclick="cpwPreset(this,'#d4a254')"></div>
+                            <div class="cpp" style="background:#9b5cf0" onclick="cpwPreset(this,'#9b5cf0')"></div>
+                            <div class="cpp" style="background:#aaaacc" onclick="cpwPreset(this,'#aaaacc')"></div>
+                        </div>
+                    </div>
+                    <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">逐字稿中每段時間戳記的文字顏色，可選擇低亮度色使其不搶眼。</p>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
                     <div class="s-lbl">次要文字色</div>
                     <div class="cpw" data-key="color_text2" data-default="#8888a8">
                         <div class="cpw-wrap">
@@ -1100,6 +1121,11 @@ function applyColors() {
     // 標題顏色：若有設定則用自訂色，否則跟隨主色調
     const titleColor = gs('color_title');
     vars['--title'] = titleColor && titleColor !== '' ? titleColor : vars['--primary'];
+    // 時間碼顏色
+    const tcColor = gs('color_tc') || '#667799';
+    vars['--tc-color']  = tcColor;
+    vars['--tc-bg']     = tcColor + '1a'; // 10% alpha background
+    vars['--tc-border'] = tcColor + '33'; // 20% alpha border
     for(const [k,v] of Object.entries(vars)) document.documentElement.style.setProperty(k,v);
 }
 
@@ -1286,28 +1312,44 @@ async function initLocalModel() {
     };
 
     const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+    // 強制使用瀏覽器 Cache Storage 作為永久本地快取
+    // 首次下載後，重新整理頁面只需從快取讀取，完全不會重新下載
     env.allowLocalModels = false;
-    env.useBrowserCache = true;   // ← 模型下載後永久快取於瀏覽器，不重複下載
-    env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/';
+    env.useBrowserCache  = true;
 
     // 先嘗試 WebGPU，失敗自動降級 WASM
     let device = await detectDevice();
     let devLabel = device === 'webgpu' ? 'WebGPU' : 'WASM';
-    setModelStatus('ms-loading', `[${devLabel}] 正在連線下載 ${modelId.split('/')[1]}...`, true);
+    setModelStatus('ms-loading', `[${devLabel}] 初始化中...`, true);
+
+    const buildProgress = (lbl) => (prog) => {
+        if (prog.status === 'downloading' || prog.status === 'progress') {
+            const pct = Math.round(prog.progress || 0);
+            const fname = prog.file?.split('/').pop() || '';
+            document.getElementById('modelProgFill').style.width = pct + '%';
+            document.getElementById('modelProgLabel').textContent =
+                `[${lbl}] ⬇ 下載中：${pct}%　${fname}`;
+        } else if (prog.status === 'loading') {
+            document.getElementById('modelProgLabel').textContent =
+                `[${lbl}] 📦 從本機快取讀取（無需重新下載）`;
+        } else if (prog.status === 'done') {
+            document.getElementById('modelProgLabel').textContent =
+                `[${lbl}] ✓ 正在初始化模型引擎，請稍候...`;
+        }
+    };
+
+    const tryLoad = async (dev, lbl) => pipeline('automatic-speech-recognition', modelId, {
+        device: dev, progress_callback: buildProgress(lbl)
+    });
 
     try {
-        transcriber = await pipeline('automatic-speech-recognition', modelId, {
-            device, progress_callback: mkProgress(devLabel)
-        });
+        transcriber = await tryLoad(device, devLabel);
     } catch(err) {
         if (device === 'webgpu') {
-            // WebGPU 失敗 → 降級至 WASM
             device = 'wasm'; devLabel = 'WASM';
-            setModelStatus('ms-loading', `[WASM] WebGPU 不支援此模型，切換至 CPU 模式下載...`, true);
+            setModelStatus('ms-loading', '[WASM] WebGPU 不支援，切換 CPU 模式...', true);
             try {
-                transcriber = await pipeline('automatic-speech-recognition', modelId, {
-                    device: 'wasm', progress_callback: mkProgress('WASM')
-                });
+                transcriber = await tryLoad('wasm', 'WASM');
             } catch(err2) {
                 localModelLoading = false;
                 setModelStatus('ms-error', '載入失敗：' + err2.message.slice(0, 70), false);
@@ -1637,7 +1679,11 @@ async function runLocalTranscription(lt) {
             try { await transcriber.dispose(); } catch(e) {}
             const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
             env.allowLocalModels = false; env.useBrowserCache = true;
-            transcriber = await pipeline('automatic-speech-recognition', modelId, { device: 'wasm' });
+            transcriber = await pipeline('automatic-speech-recognition', modelId, {
+                device: 'wasm', progress_callback: (p) => {
+                    if (p.status==='loading') lt.textContent='從快取重新載入模型（WASM）...';
+                }
+            });
             setModelStatus('ms-ready', `[WASM] ${modelId.split('/')[1]} 已切換至 CPU 模式`, false);
             result = await transcriber(audioData, opts);
         } else {
@@ -1997,7 +2043,10 @@ function renderProjects() {
         <div class="cat-body${cat.open?' open':''}">
             ${(cat.folders||[]).map((f,fi)=>`
             <div class="folder-block">
-                <div class="folder-hd" onclick="toggleFolder(${ci},${fi})">
+                <div class="folder-hd" onclick="toggleFolder(${ci},${fi})"
+                     ondragover="onFolderDragOver(event,this)" ondragleave="onFolderDragLeave(this)"
+                     ondrop="onFolderDrop(event,${ci},${fi})"
+                     style="transition:background .15s;">
                     <i class="fas fa-folder" style="color:var(--primary);font-size:11px;"></i>
                     <span class="folder-name" ondblclick="renameFolder(event,${ci},${fi})">${esc(f.name)}</span>
                     <button class="btn" style="padding:2px 6px;font-size:10.5px;" onclick="event.stopPropagation();renameFolder(event,${ci},${fi})" title="重新命名資料夾"><i class="fas fa-pen"></i></button>
@@ -2740,12 +2789,21 @@ function initTranscriptKeyHandler() {
         const afterText = fullText.slice(beforeText.length);
         // 更新當前行
         parsedResult.transcript[idx].text = beforeText.trim();
-        // 計算新行時間碼
+        // 計算截斷時間碼
+        // 優先：以影片目前播放位置為截斷點（剪輯模式）
         const cur = parsedResult.transcript[idx];
         const curStart = srtToSecs(cur.start);
-        const curEnd = srtToSecs(cur.end);
-        const ratio = fullText.length > 0 ? beforeText.length / fullText.length : 0.5;
-        const splitTime = curStart + (curEnd - curStart) * Math.max(0.1, Math.min(0.9, ratio));
+        const curEnd   = srtToSecs(cur.end);
+        let splitTime;
+        const playPos = currentMedia ? currentMedia.currentTime : null;
+        if (playPos !== null && playPos > curStart && playPos < curEnd) {
+            // 影片正在播放 → 用當前播放秒數作為截斷點
+            splitTime = playPos;
+        } else {
+            // 無播放 → 依文字比例分配時間
+            const ratio = fullText.length > 0 ? Math.max(0.05, Math.min(0.95, beforeText.length / fullText.length)) : 0.5;
+            splitTime = curStart + (curEnd - curStart) * ratio;
+        }
         const newEntry = { start: secsToSRT(splitTime), end: cur.end, speaker: cur.speaker||'', text: afterText.trim() };
         cur.end = secsToSRT(splitTime);
         // 插入新行
@@ -2829,16 +2887,47 @@ function initResizers() {
 // 匯出
 // ══════════════════════════════════════════
 function safeFilename(name) { return (name||'transcript').replace(/[\\/:*?"<>|]/g,'_'); }
-function exportTXT(){
-    const fname = safeFilename(currentProjectName) + '.txt';
-    dl(fname, document.getElementById('transcriptBox').innerText, 'text/plain;charset=utf-8');
+// 秒數 → SRT 時間戳 HH:MM:SS,mmm
+function secsToSRTTime(t) {
+    const h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=Math.floor(t%60),ms=Math.round((t%1)*1000);
+    return `${p2(h)}:${p2(m)}:${p2(s)},${String(ms).padStart(3,'0')}`;
 }
-function exportSRT(){
-    if(!parsedResult?.transcript){ toast('無轉錄結果','err'); return; }
-    if(!parsedResult.transcript[0]?.start){ toast('未生成時間戳記，無法匯出 SRT','err'); return; }
-    let s='';
-    parsedResult.transcript.forEach((l,i)=>{ if(l.start&&l.end) s+=`${i+1}\n${l.start} --> ${l.end}\n${l.text}\n\n`; });
-    dl(safeFilename(currentProjectName)+'.srt', s, 'text/plain;charset=utf-8');
+function exportSRT() {
+    if (!parsedResult?.transcript) { toast('無轉錄結果', 'err'); return; }
+    if (!parsedResult.transcript[0]?.start) { toast('未生成時間戳記，無法匯出 SRT', 'err'); return; }
+
+    let srtContent = '';
+    let seq = 1;
+    parsedResult.transcript.forEach(l => {
+        if (!l.start || !l.end || !l.text?.trim()) return;
+        // 支援 HH:MM:SS,mmm 字串格式（Gemini/Whisper 輸出）
+        let startStr = l.start.includes(',') ? l.start : secsToSRTTime(parseFloat(l.start));
+        let endStr   = l.end.includes(',')   ? l.end   : secsToSRTTime(parseFloat(l.end));
+        srtContent += `${seq}\n${startStr} --> ${endStr}\n${l.text.trim()}\n\n`;
+        seq++;
+    });
+
+    // ★ UTF-8 BOM（﻿）：剪輯軟體（Premiere / DaVinci / Final Cut）辨識繁體中文必備
+    const blob = new Blob(['﻿' + srtContent], { type: 'text/srt;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href     = url;
+    link.download = safeFilename(currentProjectName) + '.srt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast('SRT 已匯出（含 UTF-8 BOM，相容各剪輯軟體）', 'ok');
+}
+function exportTXT() {
+    const fname = safeFilename(currentProjectName) + '.txt';
+    const content = document.getElementById('transcriptBox').innerText;
+    const blob = new Blob(['﻿' + content], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = fname;
+    document.body.appendChild(link); link.click();
+    document.body.removeChild(link); URL.revokeObjectURL(url);
 }
 function copyChapters(){ navigator.clipboard.writeText(document.getElementById('chapterList').innerText).then(()=>toast('章節已複製','ok')); }
 function dl(name,content,type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click(); }
