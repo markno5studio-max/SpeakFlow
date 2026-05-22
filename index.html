@@ -366,21 +366,41 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
     <div class="ag-box">
         <div class="ag-logo"><i class="fas fa-closed-captioning"></i></div>
         <div class="ag-title" id="agSiteName">VoiceFlow AI Pro</div>
-        <div class="ag-sub">請使用您的 Google 或 Facebook 帳號登入<br>以繼續使用完整功能</div>
+        <div class="ag-sub" id="agSubText">請使用您的 Google 或 Facebook 帳號登入<br>以繼續使用完整功能</div>
 
-        <!-- Google 原生按鈕容器（GIS renderButton） -->
-        <div id="googleBtnWrap"></div>
+        <!-- OAuth 區塊（Google + Facebook） -->
+        <div id="agOAuthBlock">
+            <!-- Google 原生按鈕容器（GIS renderButton） -->
+            <div id="googleBtnWrap" style="margin-bottom:10px;min-height:44px;"></div>
+            <!-- Facebook 登入按鈕 -->
+            <button class="ag-btn facebook" id="agFbBtn" onclick="doFacebookLogin()" style="display:none;">
+                <div class="ag-ico f"><i class="fab fa-facebook-f"></i></div>
+                使用 Facebook 帳號登入
+            </button>
+        </div>
 
-        <!-- Facebook 登入按鈕 -->
-        <button class="ag-btn facebook" id="agFbBtn" onclick="doFacebookLogin()">
-            <div class="ag-ico f"><i class="fab fa-facebook-f"></i></div>
-            使用 Facebook 帳號登入
-        </button>
-
+        <!-- 錯誤訊息 -->
         <div class="ag-err" id="agErr"></div>
 
-        <p style="font-size:10.5px;color:var(--text-tertiary);margin-top:14px;line-height:1.7;">
-            登入即表示您同意本服務條款。<br>
+        <!-- 管理員後台入口（永遠顯示，用於設定 OAuth） -->
+        <div id="agAdminToggle" style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+            <button class="btn" style="width:100%;font-size:12px;color:var(--text-tertiary);" onclick="toggleAgAdmin()">
+                <i class="fas fa-gear" style="margin-right:6px;"></i>管理員後台設定入口
+            </button>
+        </div>
+        <div id="agAdminPanel" style="display:none;margin-top:10px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:14px;">
+            <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text-secondary);">
+                <i class="fas fa-lock" style="margin-right:5px;color:var(--primary);"></i>管理員驗證
+            </div>
+            <input type="text" class="fi" id="agAdminUser" placeholder="帳號" autocomplete="username" style="margin-bottom:8px;">
+            <input type="password" class="fi" id="agAdminPass" placeholder="密碼" autocomplete="current-password" style="margin-bottom:8px;">
+            <div class="err-msg" id="agAdminErr" style="display:none;">帳號或密碼錯誤。</div>
+            <button class="btn btn-p btn-full" style="margin-top:4px;" onclick="doAuthAdminBypass()">
+                <i class="fas fa-right-to-bracket"></i> 以管理員身份進入
+            </button>
+        </div>
+
+        <p style="font-size:10.5px;color:var(--text-tertiary);margin-top:12px;line-height:1.7;">
             帳號資訊僅儲存於您的瀏覽器本機，不會傳送至任何伺服器。
         </p>
     </div>
@@ -1125,6 +1145,12 @@ window.onload = () => {
         o.addEventListener('click', e=>{ if(e.target===o && !noClose.includes(o.id)) closeModal(o.id); });
     });
     document.getElementById('gatePass').addEventListener('keydown', e=>{ if(e.key==='Enter') doAdminLogin(); });
+    // Auth gate 管理員面板 Enter 鍵
+    document.addEventListener('keydown', e=>{
+        if(e.key!=='Enter') return;
+        const ap = document.getElementById('agAdminPanel');
+        if(ap && ap.style.display!=='none' && (e.target.id==='agAdminUser'||e.target.id==='agAdminPass')) doAuthAdminBypass();
+    });
     initAllCPW();
     initResizers();
     initTranscriptKeyHandler();
@@ -2458,7 +2484,8 @@ function avatarColor(e){ return ACOLORS[hashStr(e)%ACOLORS.length]; }
 // 檢查是否已登入；未登入則顯示封鎖牆
 function checkAuth() {
     const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
-    if (u && u.name) {
+    const adminBypass = Date.now() < parseInt(localStorage.getItem('vf_auth_bypass') || '0');
+    if ((u && u.name) || adminBypass) {
         hideAuthGate();
     } else {
         showAuthGate();
@@ -2468,28 +2495,43 @@ function checkAuth() {
 function showAuthGate() {
     const gate = document.getElementById('authGate');
     gate.classList.add('show');
-    // 同步站名到登入牆
+
+    // 同步站名
     const sn = document.getElementById('agSiteName');
     if (sn) sn.textContent = (gs('siteName') || 'VoiceFlow') + ' AI Pro';
 
     const googleId = gs('googleClientId');
-    const fbId = gs('facebookAppId');
-    const wrap = document.getElementById('googleBtnWrap');
-    const fbBtn = document.getElementById('agFbBtn');
+    const fbId     = gs('facebookAppId');
+    const wrap     = document.getElementById('googleBtnWrap');
+    const fbBtn    = document.getElementById('agFbBtn');
+    const subText  = document.getElementById('agSubText');
+
+    // 清空舊狀態
+    if (wrap) wrap.innerHTML = '';
+    if (document.getElementById('agErr')) document.getElementById('agErr').style.display = 'none';
 
     if (!googleId && !fbId) {
-        // 兩個都未設定：顯示管理員提示
-        if (wrap) wrap.innerHTML = `<div style="font-size:11.5px;color:var(--accent-red);padding:10px 12px;background:rgba(240,96,96,.08);border:1px solid rgba(240,96,96,.2);border-radius:var(--r-sm);margin-bottom:10px;line-height:1.7;text-align:left;">
-            <i class="fas fa-triangle-exclamation" style="margin-right:5px;"></i>
-            尚未設定 OAuth 登入。<br>請管理員進入 <strong>後台設定 → 進階</strong>，填入 Google Client ID 或 Facebook App ID。
-        </div>`;
+        // ─ 兩個都未設定 → 顯示提示，隱藏 OAuth 區（但管理員入口永遠可用）
+        if (subText) subText.innerHTML = '尚未設定社群登入。<br>請管理員使用下方入口進入後台設定。';
         if (fbBtn) fbBtn.style.display = 'none';
+        if (wrap)  wrap.innerHTML = '';
     } else {
-        if (fbBtn) fbBtn.style.display = fbId ? '' : 'none';
-        // 初始化 Google 按鈕
-        if (googleId) initGoogleAuth();
-        else if (wrap) wrap.innerHTML = '';
+        if (subText) subText.innerHTML = '請使用您的 Google 或 Facebook 帳號登入<br>以繼續使用完整功能';
+        // Google 按鈕
+        if (googleId) {
+            initGoogleAuth();
+        } else {
+            if (wrap) wrap.innerHTML = '';
+        }
+        // Facebook 按鈕
+        if (fbBtn) fbBtn.style.display = fbId ? 'flex' : 'none';
     }
+
+    // 管理員面板重置
+    const ap = document.getElementById('agAdminPanel');
+    if (ap) ap.style.display = 'none';
+    const ae = document.getElementById('agAdminErr');
+    if (ae) ae.style.display = 'none';
 }
 
 function hideAuthGate() {
@@ -2498,8 +2540,36 @@ function hideAuthGate() {
 
 function showAgErr(msg) {
     const el = document.getElementById('agErr');
+    if (!el) return;
     el.textContent = msg;
     el.style.display = 'block';
+}
+
+// 管理員後台入口（在登入牆中繞過 OAuth，僅限管理員）
+function toggleAgAdmin() {
+    const p = document.getElementById('agAdminPanel');
+    if (!p) return;
+    const isHidden = p.style.display === 'none';
+    p.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+        setTimeout(() => { const u = document.getElementById('agAdminUser'); if(u) u.focus(); }, 50);
+    }
+}
+
+function doAuthAdminBypass() {
+    const user = (document.getElementById('agAdminUser')?.value || '').trim();
+    const pass =  document.getElementById('agAdminPass')?.value || '';
+    const errEl = document.getElementById('agAdminErr');
+    if (user === gs('adminUser') && pass === gs('adminPass')) {
+        // 24 小時管理員旁路
+        localStorage.setItem('vf_auth_bypass', String(Date.now() + 86400000));
+        hideAuthGate();
+        if (errEl) errEl.style.display = 'none';
+        toast('✅ 管理員模式，已跳過 OAuth 登入。請至後台設定 → 進階 填入 Client ID。', 'ok');
+    } else {
+        if (errEl) errEl.style.display = 'block';
+        const p = document.getElementById('agAdminPass'); if(p) p.value = '';
+    }
 }
 
 // ── Google Identity Services ──
@@ -2507,27 +2577,56 @@ function initGoogleAuth() {
     const clientId = gs('googleClientId');
     const wrap = document.getElementById('googleBtnWrap');
     if (!clientId || !wrap) return;
-    // 等待 GIS SDK 載入
+    // 等待 GIS SDK 載入（最多重試 15 次，每次 400ms）
     const tryInit = (attempts) => {
         if (!window.google?.accounts?.id) {
             if (attempts > 0) setTimeout(() => tryInit(attempts - 1), 400);
+            else {
+                // SDK 一直未載入 → 顯示手動點擊按鈕
+                wrap.innerHTML = `<button class="ag-btn google" onclick="doGoogleLoginManual()" style="display:flex;">
+                    <div class="ag-ico g"><i class="fab fa-google"></i></div>
+                    使用 Google 帳號登入
+                </button>`;
+            }
             return;
         }
-        wrap.innerHTML = ''; // 清空舊按鈕
-        google.accounts.id.initialize({
-            client_id: clientId,
-            callback: handleGoogleCredential,
-            use_fedcm_for_prompt: false
-        });
-        google.accounts.id.renderButton(wrap, {
-            theme: 'filled_black',
-            size: 'large',
-            width: 304,
-            locale: 'zh-TW',
-            text: 'signin_with'
-        });
+        try {
+            wrap.innerHTML = '';
+            google.accounts.id.initialize({
+                client_id: clientId,
+                callback: handleGoogleCredential,
+                use_fedcm_for_prompt: false
+            });
+            google.accounts.id.renderButton(wrap, {
+                theme: 'filled_black',
+                size: 'large',
+                width: 304,
+                locale: 'zh-TW',
+                text: 'signin_with'
+            });
+        } catch(err) {
+            console.error('[Google Auth]', err);
+            wrap.innerHTML = `<button class="ag-btn google" onclick="doGoogleLoginManual()" style="display:flex;">
+                <div class="ag-ico g"><i class="fab fa-google"></i></div>
+                使用 Google 帳號登入
+            </button>`;
+        }
     };
-    tryInit(10);
+    tryInit(15);
+}
+
+// 備援：手動觸發 Google One Tap
+function doGoogleLoginManual() {
+    const clientId = gs('googleClientId');
+    if (!clientId) { showAgErr('尚未設定 Google Client ID。請管理員進入後台設定。'); return; }
+    if (!window.google?.accounts?.id) { showAgErr('Google SDK 尚未載入，請確認網路後重新整理。'); return; }
+    try {
+        google.accounts.id.prompt((n) => {
+            if (n.isNotDisplayed() || n.isSkippedMoment()) {
+                showAgErr('無法顯示 Google 登入視窗，請確認瀏覽器未封鎖彈出視窗。');
+            }
+        });
+    } catch(e) { showAgErr('Google 登入發生錯誤：' + e.message); }
 }
 
 function handleGoogleCredential(response) {
@@ -2638,6 +2737,7 @@ function doLogout() {
         try { FB.getLoginStatus(r => { if (r.status==='connected') FB.logout(()=>{}); }); } catch(e) {}
     }
     localStorage.removeItem('vf_user');
+    localStorage.removeItem('vf_auth_bypass'); // 同時清除管理員旁路
     updateUserUI();
     closeModal('loginModal');
     toast('已成功登出', 'ok');
@@ -3165,6 +3265,7 @@ function srtToSecs(str) {
     } catch { return 0; }
 }
 function secsToSRT(t) {
+    if (t == null || isNaN(t) || !isFinite(t) || t < 0) t = 0;
     const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60), ms=Math.round((t%1)*1000);
     return `${p2(h)}:${p2(m)}:${p2(s)},${String(ms).padStart(3,'0')}`;
 }
@@ -3243,54 +3344,69 @@ function calcSplitTime(cur, idx, beforeRatio) {
     return idx * 3;
 }
 
+// 取得游標在 contenteditable 元素的純文字位置（支援含 <mark> 等子元素）
+function getCaretCharOffset(el) {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return 0;
+    const range = sel.getRangeAt(0).cloneRange();
+    // 用 selectNodeContents 選取整個 el，再縮至游標位置，toString() 即為游標前的純文字
+    const fullRange = document.createRange();
+    fullRange.selectNodeContents(el);
+    fullRange.setEnd(range.startContainer, range.startOffset);
+    return fullRange.toString().length;
+}
+
 function initTranscriptKeyHandler() {
-    document.getElementById('transcriptBox').addEventListener('keydown', function(e) {
+    const tb = document.getElementById('transcriptBox');
+    if (!tb) return;
+
+    tb.addEventListener('keydown', function(e) {
         if (e.key !== 'Enter') return;
         const span = e.target.closest('.tr-txt');
         if (!span || !parsedResult?.transcript) return;
         e.preventDefault();
 
         const idx = parseInt(span.dataset.i);
-        const sel = window.getSelection();
-        if (!sel.rangeCount) return;
-        const range = sel.getRangeAt(0);
+        if (isNaN(idx) || idx < 0 || idx >= parsedResult.transcript.length) return;
 
-        // 取得游標前後文字
-        const fullText  = span.innerText || '';
-        const preRange  = document.createRange();
-        preRange.setStart(span, 0);
-        preRange.setEnd(range.startContainer, range.startOffset);
-        const beforeText = preRange.toString();
-        const afterText  = fullText.slice(beforeText.length);
-        const beforeRatio = fullText.length > 0 ? beforeText.length / fullText.length : 0.5;
+        // 可靠的游標位置抓取（相容 <mark> 標籤）
+        const fullText   = span.innerText || '';
+        const caretPos   = getCaretCharOffset(span);
+        const beforeText = fullText.slice(0, caretPos).trim();
+        const afterText  = fullText.slice(caretPos).trim();
+        const beforeRatio = fullText.length > 0 ? caretPos / fullText.length : 0.5;
 
         // 更新當前行文字
-        parsedResult.transcript[idx].text = beforeText.trim();
+        const cur = parsedResult.transcript[idx];
+        cur.text = beforeText;
 
-        // 計算截斷秒數
-        const cur       = parsedResult.transcript[idx];
-
-        // ★ 必須在修改 cur 之前先儲存原始 end
+        // 儲存原始 end（必須在修改前抓）
         const origEnd   = cur.end || '';
+        const origStart = cur.start || '';
+
+        // 計算截斷時間
         const splitTime = calcSplitTime(cur, idx, beforeRatio);
 
-        // 為原始段落補上缺失的 start/end
-        if (!cur.start) cur.start = secsToSRT(Math.max(0, splitTime - 3));
-        cur.end = secsToSRT(splitTime); // 原段落結尾 = 截斷點
+        // 補上原段落的 start（若沒有）
+        if (!cur.start) {
+            const estimatedStart = Math.max(0, splitTime - (audioDuration > 0 ? audioDuration / Math.max(parsedResult.transcript.length, 1) : 3));
+            cur.start = secsToSRT(estimatedStart);
+        }
+        // 原段落結尾 = 截斷點
+        cur.end = secsToSRT(splitTime);
 
-        // 新段落：start = 截斷點，end = 繼承原始 end（若 end > splitTime）否則估算
-        const newEntryEnd = (srtToSecs(origEnd) > splitTime)
-            ? origEnd
-            : secsToSRT(splitTime + 3);
+        // 新段落的結尾
+        const origEndSecs = srtToSecs(origEnd);
+        const newEntryEnd = origEndSecs > splitTime ? origEnd : secsToSRT(splitTime + (audioDuration > 0 ? audioDuration / Math.max(parsedResult.transcript.length + 1, 1) : 3));
 
         const newEntry = {
             start:   secsToSRT(splitTime),
             end:     newEntryEnd,
             speaker: cur.speaker || '',
-            text:    afterText.trim()
+            text:    afterText
         };
 
-        // 強制顯示時間碼
+        // 強制顯示時間碼（切段後才看得到效果）
         const tsChk = document.getElementById('enableTimestamps');
         if (tsChk) tsChk.checked = true;
 
@@ -3298,21 +3414,24 @@ function initTranscriptKeyHandler() {
         parsedResult.transcript.splice(idx + 1, 0, newEntry);
         renderResults();
 
-        // Toast 確認
-        toast(`✂ ${formatTC(newEntry.start)} ← 截斷點`, 'ok');
+        // Toast：顯示截斷點時間碼
+        toast(`✂ 截斷於 ${formatTC(newEntry.start)}`, 'ok');
 
         // 聚焦新行首位
         setTimeout(() => {
             const newSpan = document.querySelector(`.tr-txt[data-i="${idx + 1}"]`);
             if (newSpan) { newSpan.focus(); placeCaretAtStart(newSpan); }
-        }, 30);
+        }, 40);
     });
+
     // 同步編輯文字回 parsedResult
-    document.getElementById('transcriptBox').addEventListener('input', function(e) {
+    tb.addEventListener('input', function(e) {
         const span = e.target.closest('.tr-txt');
         if (!span || !parsedResult?.transcript) return;
         const idx = parseInt(span.dataset.i);
-        if (parsedResult.transcript[idx]) parsedResult.transcript[idx].text = span.innerText.trim();
+        if (!isNaN(idx) && parsedResult.transcript[idx]) {
+            parsedResult.transcript[idx].text = span.innerText.trim();
+        }
     });
 }
 function placeCaretAtStart(el) {
