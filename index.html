@@ -445,8 +445,8 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     <select class="fs" id="whisperModelSelect" onchange="onWhisperModelChange()">
                         <option value="tiny">Whisper Tiny (~75MB) · 極速，適合測試</option>
                         <option value="base">Whisper Base (~141MB) · 輕量均衡</option>
-                        <option value="small" selected>Whisper Small (~483MB) · 推薦★ 繁中最精準</option>
-                        <option value="large">Whisper Large-v2 (~2.9GB) · 極致精準度（需 8GB+ 記憶體）</option>
+                        <option value="small" selected>Whisper Small (~483MB) · 推薦★ 繁中優化版</option>
+                        <option value="large">Whisper Large-v3-Turbo (~809MB) · 最高精準度</option>
                     </select>
                 </div>
                 <div class="model-status ms-idle" id="modelStatusBar">
@@ -1005,9 +1005,9 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
 // 設定與持久化
 // ══════════════════════════════════════════
 const D = {
-    adminUser:'mark', adminPass:'mark888',
+    adminUser:'admin', adminPass:'admin888',
     siteName:'VoiceFlow', pageTitle:'VoiceFlow AI Pro - 專業語音平台',
-    apiKey:'AIzaSyCPnfPuYktCup7O_c3axDpZkK_dUPnv0tc',
+    apiKey:'',
     color_primary:'#d4a254', color_bg:'#0b0b0f', color_elevated:'#131318',
     color_card:'#16161e', color_input:'#0e0e16',
     color_text:'#ededf5', color_text2:'#8888a8',
@@ -1016,13 +1016,15 @@ const D = {
 const gs = k => localStorage.getItem('vf_'+k) ?? D[k];
 const ss = (k,v) => localStorage.setItem('vf_'+k, v);
 
-// ── Whisper 模型對照表（僅使用 @xenova/transformers 確認可用的模型）──
+// ── Whisper 模型對照表（@huggingface/transformers@3，支援 onnx-community 模型）──
 const WHISPER_MODELS = {
     'tiny':  'Xenova/whisper-tiny',
     'base':  'Xenova/whisper-base',
-    'small': 'Xenova/whisper-small',
-    'large': 'Xenova/whisper-large-v2'
+    'small': 'onnx-community/whisper-small-chinese-2-ONNX',  // 繁中優化 ~483MB
+    'large': 'onnx-community/whisper-large-v3-turbo-ONNX'    // 極致精準 ~809MB
 };
+// ── 函式庫 CDN（v3 起正式支援 onnx-community 大型模型）──
+const HF_TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
 
 // ── OpenCC 繁體轉換器 ──
 let twConverter = null;
@@ -1266,7 +1268,7 @@ async function initLocalModel() {
     if (transcriber) { try { await transcriber.dispose(); } catch(e) {} transcriber = null; }
     localModelLoading = true;
     const key = document.getElementById('whisperModelSelect')?.value || 'small';
-    const modelId = WHISPER_MODELS[key] || 'Xenova/whisper-small';
+    const modelId = WHISPER_MODELS[key] || 'onnx-community/whisper-small-chinese-2-ONNX';
     document.getElementById('startBtn').disabled = true;
     document.getElementById('disposeModelBtn').style.display = 'none';
 
@@ -1282,7 +1284,7 @@ async function initLocalModel() {
         }
     };
 
-    const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+    const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
     env.allowLocalModels = false;
     env.useBrowserCache = true;
 
@@ -1629,9 +1631,9 @@ async function runLocalTranscription(lt) {
         if (isOrtErr) {
             lt.textContent = 'WebGPU 推理失敗，切換至 CPU(WASM) 模式重試...';
             const key = document.getElementById('whisperModelSelect')?.value || 'small';
-            const modelId = WHISPER_MODELS[key] || 'Xenova/whisper-small';
+            const modelId = WHISPER_MODELS[key] || 'onnx-community/whisper-small-chinese-2-ONNX';
             try { await transcriber.dispose(); } catch(e) {}
-            const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+            const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
             env.allowLocalModels = false; env.useBrowserCache = true;
             transcriber = await pipeline('automatic-speech-recognition', modelId, { device: 'wasm' });
             setModelStatus('ms-ready', `[WASM] ${modelId.split('/')[1]} 已切換至 CPU 模式`, false);
@@ -2415,7 +2417,7 @@ function saveSettings() {
     const ms=document.getElementById('sModelSize').value;
     if(name) ss('siteName',name);
     if(title) ss('pageTitle',title);
-    if(apiKey) ss('apiKey',apiKey);
+    ss('apiKey', apiKey);          // 允許儲存空值（使用者可清除 API 金鑰）
     if(nu) ss('adminUser',nu);
     if(np) ss('adminPass',np);
     ss('modelSize',ms);
