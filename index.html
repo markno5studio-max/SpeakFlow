@@ -243,13 +243,19 @@ input[type="range"]{width:100%;accent-color:var(--primary);}
 textarea.fi{resize:vertical;}
 
 /* ─── PLAY BAR ─── */
-.play-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);}
+.play-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);transition:border-radius .15s;}
+.play-bar.has-wave{border-radius:0;}
 .play-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:var(--t);flex-shrink:0;}
 .play-btn:hover{background:rgba(var(--primary-rgb),.15);border-color:rgba(var(--primary-rgb),.4);}
 .seek-bar{flex:1;height:4px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.12);border-radius:2px;cursor:pointer;outline:none;}
 .seek-bar::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--primary);cursor:pointer;}
 .time-disp{font-size:10.5px;color:var(--text-tertiary);font-variant-numeric:tabular-nums;white-space:nowrap;}
 .speed-sel{padding:3px 6px;font-size:11px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);cursor:pointer;font-family:inherit;}
+
+/* ─── WAVEFORM ─── */
+.wave-wrap{background:#0c1520;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);overflow:hidden;display:none;position:relative;}
+#waveCanvas{display:block;width:100%;height:60px;cursor:crosshair;}
+.wave-wrap::after{content:'';position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(255,255,255,.04);pointer-events:none;}
 
 /* ─── FIND / REPLACE BAR ─── */
 .find-bar{background:rgba(var(--primary-rgb),.05);border:1px solid rgba(var(--primary-rgb),.18);border-radius:var(--r-md);padding:9px 12px;margin-bottom:10px;}
@@ -453,7 +459,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     <div class="ms-dot"></div>
                     <span id="modelStatusTxt">本地模型尚未初始化</span>
                     <button class="btn" style="margin-left:auto;padding:4px 10px;font-size:11.5px;" id="initModelBtn" onclick="initLocalModel()">
-                        <i class="fas fa-download"></i> 下載並初始化
+                        <i class="fas fa-download"></i> <span id="initModelBtnLbl">下載並初始化</span>
                     </button>
                     <button class="btn btn-danger" style="padding:4px 10px;font-size:11.5px;display:none;" id="disposeModelBtn" onclick="disposeLocalModel()" title="釋放記憶體">
                         <i class="fas fa-trash-can"></i> 釋放
@@ -559,6 +565,10 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <option value="1.5">1.5×</option>
                         <option value="2">2×</option>
                     </select>
+                </div>
+                <!-- 音軌波形視覺化 -->
+                <div class="wave-wrap" id="waveWrap">
+                    <canvas id="waveCanvas" height="60"></canvas>
                 </div>
             </div>
 
@@ -1058,6 +1068,7 @@ try {
 let currentFile=null, audioDuration=0, parsedResult=null, fatKeywords=[];
 let localModelReady=false, localModelLoading=false, transcriber=null;
 let currentWhisperKey=null, pendingUser=null, currentMedia=null;
+let waveformData=null, waveAnimReq=null;
 // ── 麥克風錄音 State ──
 let micStream=null, micContext=null, micProcessor=null, micChunks=[], micRecording=false;
 // ── 尋找/取代 State ──
@@ -1096,6 +1107,43 @@ window.onload = () => {
         if (transcriber) { try { transcriber.dispose(); } catch(e) {} }
         if (micStream) { try { micStream.getTracks().forEach(t=>t.stop()); } catch(e) {} }
     });
+
+    // 自動從瀏覽器快取還原上次使用的模型
+    (async () => {
+        const _lastModel = localStorage.getItem('vf_last_model');
+        if (!_lastModel || !WHISPER_MODELS[_lastModel]) return;
+
+        // 確認模型檔案確實存在於 Browser Cache Storage
+        let isCached = false;
+        try {
+            const cacheNames = await caches.keys();
+            for (const name of cacheNames) {
+                const cache  = await caches.open(name);
+                const keys   = await cache.keys();
+                const modelSlug = _lastModel; // e.g. 'small'
+                const modelFull = WHISPER_MODELS[_lastModel].split('/')[1]; // e.g. 'whisper-small'
+                if (keys.some(k => k.url.includes(modelFull))) { isCached = true; break; }
+            }
+        } catch(e) { isCached = true; } // 無法查詢時樂觀假設已快取
+
+        if (!isCached) return; // 快取不存在，不自動初始化（避免觸發意外下載）
+
+        // 更新模型選擇器與按鈕外觀
+        const sel = document.getElementById('whisperModelSelect');
+        if (sel) sel.value = _lastModel;
+        const lbl  = document.getElementById('initModelBtnLbl');
+        const icon = document.querySelector('#initModelBtn i');
+        if (lbl)  lbl.textContent = '從快取載入';
+        if (icon) icon.className  = 'fas fa-bolt';
+        setModelStatus('ms-idle', `⚡ 偵測到快取模型，正在自動載入...`, false);
+
+        // 略延後避免與其他 onload 初始化衝突
+        setTimeout(() => {
+            if (document.getElementById('modelSelect').value === 'local') {
+                initLocalModel();
+            }
+        }, 900);
+    })();
 };
 
 // ══════════════════════════════════════════
@@ -1367,6 +1415,8 @@ async function initLocalModel() {
     localModelReady = true;
     localModelLoading = false;
     currentWhisperKey = key;
+    // 記憶最後使用的模型 → 下次開啟頁面可自動從快取載入
+    localStorage.setItem('vf_last_model', key);
     setModelStatus('ms-ready', `[${devLabel}] ${modelId.split('/')[1]} 已就緒，可離線使用`, false);
     document.getElementById('disposeModelBtn').style.display = 'inline-flex';
     updateStartBtn();
@@ -1612,6 +1662,13 @@ function pickFile(file) {
     el.onended=()=>{ const pi=document.getElementById('playIcon'); if(pi) pi.className='fas fa-play'; };
     currentMedia=el;
     mc.appendChild(el);
+
+    // 音軌波形：非同步建立，不阻塞 UI
+    waveformData = null;
+    stopWaveAnim();
+    document.getElementById('waveWrap').style.display = 'none';
+    document.querySelector('.play-bar').classList.remove('has-wave');
+    buildWaveform(file);
 }
 
 function clearFile() {
@@ -1620,6 +1677,10 @@ function clearFile() {
     document.getElementById('fileInput').value = '';
     document.getElementById('fileBar').style.display = 'none';
     document.getElementById('mediaContainer').innerHTML = '';
+    waveformData = null;
+    stopWaveAnim();
+    document.getElementById('waveWrap').style.display = 'none';
+    document.querySelector('.play-bar').classList.remove('has-wave');
     updateStartBtn();
 }
 
@@ -2622,6 +2683,129 @@ function updateTimeDisp(el) {
 }
 
 // ══════════════════════════════════════════
+// 音軌波形視覺化
+// ══════════════════════════════════════════
+async function buildWaveform(file) {
+    const wrap   = document.getElementById('waveWrap');
+    const canvas = document.getElementById('waveCanvas');
+    if (!wrap || !canvas) return;
+
+    // ── Step 1: 讀取為 ArrayBuffer（使用 FileReader，相容 Safari < 14.1）──
+    let ab;
+    try {
+        ab = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = e => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('FileReader 讀取失敗'));
+            reader.readAsArrayBuffer(file);
+        });
+    } catch(e) {
+        console.warn('[Waveform] FileReader 失敗:', e);
+        return;
+    }
+
+    // ── Step 2: 解碼音訊（使用 callback 形式，相容 Safari 所有版本）──
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) { console.warn('[Waveform] 瀏覽器不支援 AudioContext'); return; }
+    const tmpCtx = new AudioCtx();
+    let audioBuffer;
+    try {
+        audioBuffer = await new Promise((resolve, reject) => {
+            tmpCtx.decodeAudioData(ab, resolve, (err) => {
+                reject(new Error(err ? err.message || '解碼失敗' : '解碼失敗'));
+            });
+        });
+    } catch(e) {
+        console.warn('[Waveform] decodeAudioData 失敗:', e);
+        try { tmpCtx.close(); } catch(_){}
+        return;
+    }
+    try { tmpCtx.close(); } catch(_){}
+
+    // ── Step 3: 計算峰值振幅（固定 1200 根長條，不依賴 DOM 尺寸）──
+    const BARS  = 1200;
+    const raw   = audioBuffer.getChannelData(0);
+    const block = Math.max(1, Math.floor(raw.length / BARS));
+    waveformData = new Float32Array(BARS);
+    for (let i = 0; i < BARS; i++) {
+        let peak = 0;
+        for (let j = 0; j < block; j++) {
+            const idx = i * block + j;
+            if (idx < raw.length) peak = Math.max(peak, Math.abs(raw[idx]));
+        }
+        waveformData[i] = peak;
+    }
+
+    // ── Step 4: 固定 canvas 內部解析度，CSS 拉伸自適應 ──
+    canvas.width  = BARS;
+    canvas.height = 120;  // 2x for retina, CSS height is 60px
+
+    // ── Step 5: 顯示波形區 ──
+    wrap.style.display = 'block';
+    const pb = document.querySelector('.play-bar');
+    if (pb) pb.classList.add('has-wave');
+
+    // ── Step 6: 點擊波形 seek ──
+    canvas.onclick = e => {
+        if (!currentMedia || !currentMedia.duration) return;
+        const rect = canvas.getBoundingClientRect();
+        currentMedia.currentTime = ((e.clientX - rect.left) / rect.width) * currentMedia.duration;
+    };
+
+    startWaveAnim();
+}
+
+function drawWaveform() {
+    const canvas = document.getElementById('waveCanvas');
+    if (!canvas || !waveformData) return;
+    const ctx2d = canvas.getContext('2d');
+    const W = canvas.width;   // 1200
+    const H = canvas.height;  // 120
+    const cy = H / 2;
+
+    // 背景
+    ctx2d.fillStyle = '#0c1520';
+    ctx2d.fillRect(0, 0, W, H);
+
+    // 中心線
+    ctx2d.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx2d.fillRect(0, cy - 1, W, 1);
+
+    // 播放進度（像素位置）
+    const dur = currentMedia ? (currentMedia.duration || 0) : 0;
+    const cur = currentMedia ? (currentMedia.currentTime || 0) : 0;
+    const progress = dur > 0 ? (cur / dur) * W : 0;
+
+    // 波形條
+    for (let i = 0; i < W; i++) {
+        const amp = Math.max(1, waveformData[i] * cy * 0.85);
+        ctx2d.fillStyle = i < progress ? '#5b9bd5' : '#27445e';
+        ctx2d.fillRect(i, cy - amp, 1, amp * 2);
+    }
+
+    // 播放頭白線
+    if (dur > 0 && progress > 0) {
+        const x = Math.round(progress);
+        ctx2d.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx2d.lineWidth   = 2;
+        ctx2d.beginPath();
+        ctx2d.moveTo(x, 0);
+        ctx2d.lineTo(x, H);
+        ctx2d.stroke();
+    }
+}
+
+function startWaveAnim() {
+    if (waveAnimReq) cancelAnimationFrame(waveAnimReq);
+    const loop = () => { drawWaveform(); waveAnimReq = requestAnimationFrame(loop); };
+    waveAnimReq = requestAnimationFrame(loop);
+}
+
+function stopWaveAnim() {
+    if (waveAnimReq) { cancelAnimationFrame(waveAnimReq); waveAnimReq = null; }
+}
+
+// ══════════════════════════════════════════
 // 尋找 / 取代
 // ══════════════════════════════════════════
 function doFind() {
@@ -2790,22 +2974,36 @@ function initTranscriptKeyHandler() {
         // 更新當前行
         parsedResult.transcript[idx].text = beforeText.trim();
         // 計算截斷時間碼
-        // 優先：以影片目前播放位置為截斷點（剪輯模式）
         const cur = parsedResult.transcript[idx];
         const curStart = srtToSecs(cur.start);
         const curEnd   = srtToSecs(cur.end);
+        const hasValidRange = cur.start && cur.end && curEnd > curStart;
         let splitTime;
         const playPos = currentMedia ? currentMedia.currentTime : null;
-        if (playPos !== null && playPos > curStart && playPos < curEnd) {
-            // 影片正在播放 → 用當前播放秒數作為截斷點
-            splitTime = playPos;
+        if (playPos !== null && playPos > 0) {
+            // 有播放位置時：優先以媒體當前秒數為截斷點
+            if (hasValidRange && playPos > curStart && playPos < curEnd) {
+                splitTime = playPos; // 精確落在段落範圍內
+            } else if (!hasValidRange) {
+                splitTime = playPos; // 無原始時間碼 → 直接用播放位置
+            } else {
+                const ratio = fullText.length > 0 ? Math.max(0.05, Math.min(0.95, beforeText.length / fullText.length)) : 0.5;
+                splitTime = curStart + (curEnd - curStart) * ratio;
+            }
         } else {
-            // 無播放 → 依文字比例分配時間
             const ratio = fullText.length > 0 ? Math.max(0.05, Math.min(0.95, beforeText.length / fullText.length)) : 0.5;
-            splitTime = curStart + (curEnd - curStart) * ratio;
+            splitTime = hasValidRange ? curStart + (curEnd - curStart) * ratio : 0;
         }
-        const newEntry = { start: secsToSRT(splitTime), end: cur.end, speaker: cur.speaker||'', text: afterText.trim() };
+        // 若原始段落無時間碼，補上推算的時間碼（不覆蓋已有值，包含合法的 00:00:00,000）
+        if (!cur.start) {
+            cur.start = secsToSRT(Math.max(0, splitTime - 2));
+        }
+        const newEnd = cur.end ? cur.end : secsToSRT(splitTime + 3);
+        const newEntry = { start: secsToSRT(splitTime), end: newEnd, speaker: cur.speaker||'', text: afterText.trim() };
         cur.end = secsToSRT(splitTime);
+        // 分割後自動顯示時間碼
+        const tsChk = document.getElementById('enableTimestamps');
+        if (tsChk && !tsChk.checked) tsChk.checked = true;
         // 插入新行
         parsedResult.transcript.splice(idx + 1, 0, newEntry);
         renderResults();
@@ -2900,21 +3098,31 @@ function secsToSRTTime(t) {
 }
 function exportSRT() {
     if (!parsedResult?.transcript) { toast('無轉錄結果', 'err'); return; }
-    if (!parsedResult.transcript[0]?.start) { toast('未生成時間戳記，無法匯出 SRT', 'err'); return; }
+    // 允許匯出：若有任何一行有時間碼即可；無時間碼則全用 0
+    const toSRTStr = v => {
+        if (v == null || v === '') return '00:00:00,000';
+        if (typeof v === 'number') return secsToSRTTime(v);
+        const s = String(v);
+        // Already HH:MM:SS,mmm or HH:MM:SS.mmm
+        if (s.includes(',') || s.includes(':')) return s.replace('.', ',');
+        return secsToSRTTime(parseFloat(s) || 0);
+    };
 
-    let srtContent = '';
+    let srtLines = [];
     let seq = 1;
     parsedResult.transcript.forEach(l => {
-        if (!l.start || !l.end || !l.text?.trim()) return;
-        // 支援 HH:MM:SS,mmm 字串格式（Gemini/Whisper 輸出）
-        let startStr = l.start.includes(',') ? l.start : secsToSRTTime(parseFloat(l.start));
-        let endStr   = l.end.includes(',')   ? l.end   : secsToSRTTime(parseFloat(l.end));
-        srtContent += `${seq}\n${startStr} --> ${endStr}\n${l.text.trim()}\n\n`;
+        if (!l.text?.trim()) return;
+        const startStr = toSRTStr(l.start);
+        const endStr   = toSRTStr(l.end || l.start);
+        // SRT 規格：CRLF 換行，entry 間空行
+        srtLines.push(`${seq}\r\n${startStr} --> ${endStr}\r\n${l.text.trim()}\r\n`);
         seq++;
     });
+    if (!srtLines.length) { toast('沒有可匯出的字幕段落', 'err'); return; }
 
-    // ★ UTF-8 BOM（﻿）：剪輯軟體（Premiere / DaVinci / Final Cut）辨識繁體中文必備
-    const blob = new Blob(['﻿' + srtContent], { type: 'text/srt;charset=utf-8' });
+    // UTF-8 BOM + CRLF：Premiere / DaVinci / Final Cut / Resolve 最佳相容
+    const srtContent = '﻿' + srtLines.join('\r\n') + '\r\n';
+    const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href     = url;
@@ -2923,7 +3131,7 @@ function exportSRT() {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast('SRT 已匯出（含 UTF-8 BOM，相容各剪輯軟體）', 'ok');
+    toast('SRT 已匯出 ✓  若 Mac 警告無法開啟，請右鍵 → 開啟', 'ok');
 }
 function exportTXT() {
     const fname = safeFilename(currentProjectName) + '.txt';
