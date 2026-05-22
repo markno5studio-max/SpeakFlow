@@ -6,6 +6,7 @@
 <title id="pageTitle">VoiceFlow AI Pro</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link id="gFontsLink" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Noto+Serif+TC:wght@400;700&family=Nunito:wght@400;700&display=swap">
 <style>
 :root {
@@ -337,9 +338,53 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
 
 /* ─── HEADING COLOUR ─── */
 .ph h2,.c-ttl{color:var(--title,var(--text-primary));}
+
+/* ─── AUTH GATE ─── */
+#authGate{z-index:99999;background:var(--bg);backdrop-filter:none;}
+.ag-box{background:var(--bg-elevated);border:1px solid var(--border-hover);border-radius:var(--r-xl);padding:34px 28px;width:90%;max-width:360px;box-shadow:var(--shadow);text-align:center;}
+.ag-logo{width:56px;height:56px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:22px;color:#fff;box-shadow:0 0 24px rgba(var(--primary-rgb),.35);}
+.ag-title{font-size:19px;font-weight:800;letter-spacing:-.4px;margin-bottom:5px;}
+.ag-sub{font-size:12.5px;color:var(--text-secondary);margin-bottom:22px;line-height:1.6;}
+.ag-btn{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border-radius:var(--r-md);border:1px solid var(--border-hover);background:var(--bg-surface);cursor:pointer;transition:var(--t);font-size:13.5px;font-weight:700;color:var(--text-primary);font-family:inherit;margin-bottom:10px;justify-content:center;}
+.ag-btn:hover{background:var(--bg-card);border-color:rgba(255,255,255,.2);transform:translateY(-1px);}
+.ag-btn.google{border-color:rgba(66,133,244,.35);background:rgba(66,133,244,.08);}
+.ag-btn.google:hover{background:rgba(66,133,244,.15);}
+.ag-btn.facebook{border-color:rgba(24,119,242,.35);background:rgba(24,119,242,.08);}
+.ag-btn.facebook:hover{background:rgba(24,119,242,.15);}
+.ag-ico{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.ag-ico.g{background:#fff;color:#4285f4;}
+.ag-ico.f{background:#1877f2;color:#fff;}
+.ag-err{font-size:11.5px;color:var(--accent-red);margin-top:8px;padding:7px 10px;background:rgba(240,96,96,.08);border:1px solid rgba(240,96,96,.2);border-radius:var(--r-sm);display:none;text-align:left;line-height:1.6;}
+#googleBtnWrap{margin-bottom:10px;}
+#googleBtnWrap>div{margin:0 auto!important;}
 </style>
 </head>
 <body>
+<!-- ═══ AUTH GATE（登入牆，未登入時封鎖整個頁面）═══ -->
+<div class="overlay show" id="authGate">
+    <div class="ag-box">
+        <div class="ag-logo"><i class="fas fa-closed-captioning"></i></div>
+        <div class="ag-title" id="agSiteName">VoiceFlow AI Pro</div>
+        <div class="ag-sub">請使用您的 Google 或 Facebook 帳號登入<br>以繼續使用完整功能</div>
+
+        <!-- Google 原生按鈕容器（GIS renderButton） -->
+        <div id="googleBtnWrap"></div>
+
+        <!-- Facebook 登入按鈕 -->
+        <button class="ag-btn facebook" id="agFbBtn" onclick="doFacebookLogin()">
+            <div class="ag-ico f"><i class="fab fa-facebook-f"></i></div>
+            使用 Facebook 帳號登入
+        </button>
+
+        <div class="ag-err" id="agErr"></div>
+
+        <p style="font-size:10.5px;color:var(--text-tertiary);margin-top:14px;line-height:1.7;">
+            登入即表示您同意本服務條款。<br>
+            帳號資訊僅儲存於您的瀏覽器本機，不會傳送至任何伺服器。
+        </p>
+    </div>
+</div>
+
 <div class="app">
 
 <!-- ═══ SIDEBAR ═══ -->
@@ -704,57 +749,22 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
     </div>
 </div>
 
-<!-- ═══ LOGIN MODAL ═══ -->
+<!-- ═══ LOGIN MODAL（已登入後點擊頭像顯示帳號資訊）═══ -->
 <div class="overlay" id="loginModal">
     <div class="mbox sm">
         <div class="m-hd">
-            <div class="m-ttl" id="loginTitle"><i class="fas fa-user-circle" style="color:var(--primary);margin-right:7px;"></i>登入 / 註冊</div>
+            <div class="m-ttl"><i class="fas fa-user-circle" style="color:var(--primary);margin-right:7px;"></i>帳號資訊</div>
             <button class="m-close" onclick="closeModal('loginModal')"><i class="fas fa-times"></i></button>
         </div>
-        <div id="loginStep1">
-            <div class="social-btns">
-                <button class="social-btn" onclick="socialLogin('google')">
-                    <div class="sb-ico google-ico"><i class="fab fa-google"></i></div>
-                    使用 Google 帳號繼續
-                </button>
-                <button class="social-btn" onclick="socialLogin('facebook')">
-                    <div class="sb-ico fb-ico"><i class="fab fa-facebook-f"></i></div>
-                    使用 Facebook 帳號繼續
-                </button>
-            </div>
-            <div class="or-divider"><span>或使用 Email</span></div>
-            <div style="margin-bottom:10px;">
-                <label class="fl">Email</label>
-                <input type="email" class="fi" id="loginEmail" placeholder="your@email.com">
-            </div>
-            <div style="margin-bottom:10px;">
-                <label class="fl">顯示名稱（選填）</label>
-                <input type="text" class="fi" id="loginDisplayName" placeholder="留空則自動生成">
-            </div>
-            <div class="err-msg" id="loginErr">請輸入有效的 Email 地址。</div>
-            <button class="btn btn-p btn-full" style="margin-top:14px;" onclick="doEmailLogin()">
-                <i class="fas fa-right-to-bracket"></i> 繼續
-            </button>
+        <div style="text-align:center;padding:6px 0 18px;">
+            <div id="modalUserAvatar" style="width:64px;height:64px;border-radius:50%;margin:0 auto 12px;overflow:hidden;border:2px solid var(--border-hover);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;color:#fff;"></div>
+            <div style="font-size:16px;font-weight:700;" id="modalUserName"></div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;" id="modalUserEmail"></div>
+            <div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px;" id="modalUserProvider"></div>
         </div>
-        <div id="loginStep2" style="display:none;">
-            <div style="text-align:center;padding:10px 0;">
-                <div id="loginAvatar" style="width:60px;height:60px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#fff;"></div>
-                <div style="font-size:15px;font-weight:700;" id="loginWelcomeName"></div>
-                <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;" id="loginWelcomeEmail"></div>
-            </div>
-            <button class="btn btn-p btn-full" style="margin-top:16px;" onclick="confirmLogin()">
-                <i class="fas fa-check"></i> 確認登入
-            </button>
-        </div>
-        <!-- logout panel -->
-        <div id="loginLogout" style="display:none;">
-            <div style="text-align:center;padding:8px 0 16px;">
-                <div id="logoutAvatar" style="width:52px;height:52px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;"></div>
-                <div style="font-size:14px;font-weight:700;" id="logoutName"></div>
-                <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" id="logoutEmail"></div>
-            </div>
-            <button class="btn btn-danger btn-full" onclick="doLogout()"><i class="fas fa-right-from-bracket"></i> 登出</button>
-        </div>
+        <button class="btn btn-danger btn-full" onclick="doLogout()">
+            <i class="fas fa-right-from-bracket"></i> 登出帳號
+        </button>
     </div>
 </div>
 
@@ -968,6 +978,22 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             <!-- ── 進階 ── -->
             <div class="tab-pane" id="tab-advanced">
                 <div class="s-sec">
+                    <div class="s-lbl">Google 登入 — OAuth Client ID</div>
+                    <input type="text" class="fi" id="sGoogleClientId" placeholder="xxxxxx.apps.googleusercontent.com" style="margin-bottom:5px;">
+                    <p style="font-size:11px;color:var(--text-tertiary);line-height:1.7;">
+                        前往 <strong>Google Cloud Console</strong> → API 和服務 → 憑證 → 建立 OAuth 2.0 用戶端 ID（類型選「網頁應用程式」），將您的網站網址加入「已授權的 JavaScript 來源」後複製 Client ID 貼入。
+                    </p>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">Facebook 登入 — App ID</div>
+                    <input type="text" class="fi" id="sFacebookAppId" placeholder="1234567890123456" style="margin-bottom:5px;">
+                    <p style="font-size:11px;color:var(--text-tertiary);line-height:1.7;">
+                        前往 <strong>Facebook 開發者平台</strong> → 建立應用程式 → 新增「Facebook 登入」產品，在「網頁」設定中填入您的網站網址，再複製 App ID 貼入。
+                    </p>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
                     <div class="s-lbl">Gemini API 金鑰</div>
                     <input type="text" class="fi" id="sApiKey" placeholder="AIzaSy..." style="margin-bottom:5px;">
                     <p style="font-size:11px;color:var(--text-tertiary);">前往 Google AI Studio 取得 API 金鑰。僅儲存於本機瀏覽器，不會上傳至任何伺服器。</p>
@@ -1036,9 +1062,9 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
 // 設定與持久化
 // ══════════════════════════════════════════
 const D = {
-    adminUser:'admin', adminPass:'admin888',
+    adminUser:'mark', adminPass:'mark888',
     siteName:'VoiceFlow', pageTitle:'VoiceFlow AI Pro - 專業語音平台',
-    apiKey:'',
+    apiKey:'', googleClientId:'', facebookAppId:'',
     color_primary:'#d4a254', color_bg:'#0b0b0f', color_elevated:'#131318',
     color_card:'#16161e', color_input:'#0e0e16',
     color_text:'#ededf5', color_text2:'#8888a8',
@@ -1084,6 +1110,8 @@ window.onload = () => {
     applyColors(); applySiteInfo(); setupNav();
     setupDrop(); loadKeywords(); setupWYSIWYG();
     renderProjects(); updateUserUI();
+    checkAuth();
+    initFacebookSDK();
     onModelChange();
     setInputMode('file');
     loadSubtitleStyles(); applySubStyle();
@@ -1094,7 +1122,6 @@ window.onload = () => {
         o.addEventListener('click', e=>{ if(e.target===o && o.id!=='loadingModal') closeModal(o.id); });
     });
     document.getElementById('gatePass').addEventListener('keydown', e=>{ if(e.key==='Enter') doAdminLogin(); });
-    document.getElementById('loginEmail').addEventListener('keydown', e=>{ if(e.key==='Enter') doEmailLogin(); });
     initAllCPW();
     initResizers();
     initTranscriptKeyHandler();
@@ -1595,11 +1622,46 @@ async function prepAudioForGemini(file) {
     return { b64: btoa(bin), mimeType: 'audio/wav' };
 }
 
+// 將文字依字數上限切成多段，回傳段落陣列（支援 CJK）
+function splitTextToSegs(text, maxC, totalDur) {
+    const segs=[];
+    let buf='', bufLen=0;
+    // 常見中文斷句符號：優先在這些位置切斷
+    const breakChars=new Set('，。！？、；…,!?;');
+    let lastBreak=-1, lastBreakBuf='', lastBreakLen=0;
+    for(let i=0;i<text.length;i++){
+        const ch=text[i];
+        buf+=ch;
+        if(/\S/.test(ch)) bufLen++;
+        if(breakChars.has(ch)){ lastBreak=i; lastBreakBuf=buf; lastBreakLen=bufLen; }
+        if(bufLen>=maxC){
+            if(lastBreak>=0 && lastBreakLen>0){
+                segs.push(lastBreakBuf.trim());
+                buf=text.slice(lastBreak+1,i+1); bufLen=buf.replace(/\s/g,'').length;
+                lastBreak=-1; lastBreakBuf=''; lastBreakLen=0;
+            } else {
+                segs.push(buf.trim()); buf=''; bufLen=0;
+                lastBreak=-1; lastBreakBuf=''; lastBreakLen=0;
+            }
+        }
+    }
+    if(buf.trim()) segs.push(buf.trim());
+    const valid=segs.filter(s=>s);
+    const segDur=totalDur>0?totalDur/valid.length:3;
+    return valid.map((seg,i)=>({
+        start:s2srt(i*segDur), end:s2srt((i+1)*segDur),
+        speaker:'', text:seg
+    }));
+}
+
 // 將 whisper 輸出轉為通用格式
 function whisperToResult(out, maxCh) {
     const maxC = parseInt(maxCh)||20;
+    const fullText = (out.text||'').trim();
     if(!out.chunks?.length) {
-        return { transcript:[{ start:'', end:'', speaker:'', text:(out.text||'').trim() }], chapters:[] };
+        // 沒有 chunks：依字數上限切段，並用音訊長度估算時間碼
+        if(!fullText) return { transcript:[], chapters:[] };
+        return { transcript: splitTextToSegs(fullText, maxC, audioDuration), chapters:[] };
     }
     const lines=[];
     let cur='', cStart=out.chunks[0]?.timestamp[0]??0, cEnd=0;
@@ -1607,13 +1669,20 @@ function whisperToResult(out, maxCh) {
         const t=(chunk.text||'').trim();
         if(!t) continue;
         const ts=chunk.timestamp||[cEnd,cEnd];
+        const tsStart=ts[0]??cEnd, tsEnd=ts[1]??ts[0]??cEnd;
         if(cur && (cur+t).replace(/\s/g,'').length > maxC){
             lines.push({ start:s2srt(cStart), end:s2srt(cEnd), speaker:'', text:cur.trim() });
-            cur=t; cStart=ts[0]??cEnd;
+            cur=t; cStart=tsStart;
         } else { cur+=t; }
-        cEnd=ts[1]??ts[0]??cEnd;
+        cEnd=tsEnd;
     }
     if(cur.trim()) lines.push({ start:s2srt(cStart), end:s2srt(cEnd), speaker:'', text:cur.trim() });
+    // 若所有段落時間碼都是 00:00:00,000（timestamps 全為 null），改用估算
+    const allZero=lines.every(l=>l.start==='00:00:00,000'&&l.end==='00:00:00,000');
+    if(allZero && lines.length>0){
+        const segDur=audioDuration>0?audioDuration/lines.length:3;
+        lines.forEach((l,i)=>{ l.start=s2srt(i*segDur); l.end=s2srt((i+1)*segDur); });
+    }
     return { transcript:lines, chapters:[] };
 }
 
@@ -2370,86 +2439,221 @@ function hashStr(s){ let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))|0; retu
 function emailToName(e){ const p=e.split('@')[0]; return p.replace(/[._\-+]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
 function avatarColor(e){ return ACOLORS[hashStr(e)%ACOLORS.length]; }
 
-function openLogin() {
-    const u=JSON.parse(localStorage.getItem('vf_user')||'null');
-    if(u){
-        document.getElementById('loginStep1').style.display='none';
-        document.getElementById('loginStep2').style.display='none';
-        document.getElementById('loginLogout').style.display='block';
-        document.getElementById('loginTitle').innerHTML='<i class="fas fa-user-circle" style="color:var(--primary);margin-right:7px;"></i>帳號資訊';
-        const av=document.getElementById('logoutAvatar');
-        av.textContent=u.name[0].toUpperCase();
-        av.style.background=u.color;
-        document.getElementById('logoutName').textContent=u.name;
-        document.getElementById('logoutEmail').textContent=u.email;
+// ══════════════════════════════════════════
+// OAuth 登入系統
+// ══════════════════════════════════════════
+
+// 檢查是否已登入；未登入則顯示封鎖牆
+function checkAuth() {
+    const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
+    if (u && u.name) {
+        hideAuthGate();
     } else {
-        document.getElementById('loginStep1').style.display='block';
-        document.getElementById('loginStep2').style.display='none';
-        document.getElementById('loginLogout').style.display='none';
-        document.getElementById('loginTitle').innerHTML='<i class="fas fa-user-circle" style="color:var(--primary);margin-right:7px;"></i>登入 / 註冊';
+        showAuthGate();
     }
+}
+
+function showAuthGate() {
+    const gate = document.getElementById('authGate');
+    gate.classList.add('show');
+    // 同步站名到登入牆
+    const sn = document.getElementById('agSiteName');
+    if (sn) sn.textContent = (gs('siteName') || 'VoiceFlow') + ' AI Pro';
+
+    const googleId = gs('googleClientId');
+    const fbId = gs('facebookAppId');
+    const wrap = document.getElementById('googleBtnWrap');
+    const fbBtn = document.getElementById('agFbBtn');
+
+    if (!googleId && !fbId) {
+        // 兩個都未設定：顯示管理員提示
+        if (wrap) wrap.innerHTML = `<div style="font-size:11.5px;color:var(--accent-red);padding:10px 12px;background:rgba(240,96,96,.08);border:1px solid rgba(240,96,96,.2);border-radius:var(--r-sm);margin-bottom:10px;line-height:1.7;text-align:left;">
+            <i class="fas fa-triangle-exclamation" style="margin-right:5px;"></i>
+            尚未設定 OAuth 登入。<br>請管理員進入 <strong>後台設定 → 進階</strong>，填入 Google Client ID 或 Facebook App ID。
+        </div>`;
+        if (fbBtn) fbBtn.style.display = 'none';
+    } else {
+        if (fbBtn) fbBtn.style.display = fbId ? '' : 'none';
+        // 初始化 Google 按鈕
+        if (googleId) initGoogleAuth();
+        else if (wrap) wrap.innerHTML = '';
+    }
+}
+
+function hideAuthGate() {
+    document.getElementById('authGate').classList.remove('show');
+}
+
+function showAgErr(msg) {
+    const el = document.getElementById('agErr');
+    el.textContent = msg;
+    el.style.display = 'block';
+}
+
+// ── Google Identity Services ──
+function initGoogleAuth() {
+    const clientId = gs('googleClientId');
+    const wrap = document.getElementById('googleBtnWrap');
+    if (!clientId || !wrap) return;
+    // 等待 GIS SDK 載入
+    const tryInit = (attempts) => {
+        if (!window.google?.accounts?.id) {
+            if (attempts > 0) setTimeout(() => tryInit(attempts - 1), 400);
+            return;
+        }
+        wrap.innerHTML = ''; // 清空舊按鈕
+        google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleCredential,
+            use_fedcm_for_prompt: false
+        });
+        google.accounts.id.renderButton(wrap, {
+            theme: 'filled_black',
+            size: 'large',
+            width: 304,
+            locale: 'zh-TW',
+            text: 'signin_with'
+        });
+    };
+    tryInit(10);
+}
+
+function handleGoogleCredential(response) {
+    try {
+        // 解碼 JWT payload（不需驗證簽名，僅取使用者資訊）
+        const parts = response.credential.split('.');
+        const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+        doOAuthLogin({
+            provider: 'Google',
+            name: payload.name || payload.given_name || '使用者',
+            email: payload.email || '',
+            picture: payload.picture || ''
+        });
+    } catch(e) {
+        showAgErr('Google 帳號資訊解析失敗，請重新整理頁面後再試。');
+    }
+}
+
+// ── Facebook JS SDK ──
+function initFacebookSDK() {
+    const appId = gs('facebookAppId');
+    if (!appId) return;
+    window.fbAsyncInit = function() {
+        FB.init({ appId: appId, cookie: true, xfbml: false, version: 'v19.0' });
+    };
+    // 動態載入 Facebook SDK
+    if (!document.getElementById('facebook-jssdk')) {
+        const js = document.createElement('script');
+        js.id = 'facebook-jssdk';
+        js.src = 'https://connect.facebook.net/zh_TW/sdk.js';
+        js.async = true; js.defer = true;
+        document.head.appendChild(js);
+    }
+}
+
+function doFacebookLogin() {
+    const appId = gs('facebookAppId');
+    if (!appId) {
+        showAgErr('尚未設定 Facebook App ID。請管理員進入後台設定 → 進階，填入 Facebook App ID 後儲存。');
+        return;
+    }
+    if (typeof FB === 'undefined') {
+        showAgErr('Facebook SDK 尚未載入，請確認網路連線後重新整理頁面。');
+        return;
+    }
+    FB.login(function(resp) {
+        if (resp.authResponse) {
+            FB.api('/me', { fields: 'name,email,picture.width(200).height(200)' }, function(me) {
+                if (me && !me.error) {
+                    doOAuthLogin({
+                        provider: 'Facebook',
+                        name: me.name || '使用者',
+                        email: me.email || '',
+                        picture: me.picture?.data?.url || ''
+                    });
+                } else {
+                    showAgErr('無法取得 Facebook 帳號資訊，請再試一次。');
+                }
+            });
+        } else {
+            showAgErr('Facebook 登入已取消。');
+        }
+    }, { scope: 'public_profile,email' });
+}
+
+// ── 統一 OAuth 登入完成處理 ──
+function doOAuthLogin(userData) {
+    const stored = {
+        name: userData.name,
+        email: userData.email,
+        picture: userData.picture,
+        provider: userData.provider,
+        color: avatarColor(userData.email || userData.name)
+    };
+    localStorage.setItem('vf_user', JSON.stringify(stored));
+    updateUserUI();
+    hideAuthGate();
+    document.getElementById('agErr').style.display = 'none';
+    toast(`歡迎，${stored.name}！（${stored.provider} 帳號）`, 'ok');
+}
+
+// ── 點擊側欄使用者列 → 顯示帳號資訊彈窗 ──
+function openLogin() {
+    const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
+    if (!u) { showAuthGate(); return; }
+    // 顯示帳號資訊
+    const av = document.getElementById('modalUserAvatar');
+    if (u.picture) {
+        av.innerHTML = `<img src="${u.picture}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer">`;
+        av.style.background = 'transparent';
+    } else {
+        av.textContent = u.name[0].toUpperCase();
+        av.style.background = u.color || '#555';
+    }
+    document.getElementById('modalUserName').textContent = u.name;
+    document.getElementById('modalUserEmail').textContent = u.email || '';
+    document.getElementById('modalUserProvider').textContent = u.provider ? `透過 ${u.provider} 帳號登入` : '';
     document.getElementById('loginModal').classList.add('show');
 }
 
-function socialLogin(provider) {
-    const name=provider==='google'?'Google':'Facebook';
-    document.getElementById('loginEmail').placeholder=`your@${name==='Google'?'gmail':'facebook'}.com`;
-    toast(`請輸入您的 ${name} Email 地址`, 'ok');
-    document.getElementById('loginEmail').focus();
-}
-
-function doEmailLogin() {
-    const email=document.getElementById('loginEmail').value.trim();
-    const customName=document.getElementById('loginDisplayName').value.trim();
-    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
-        document.getElementById('loginErr').style.display='block'; return;
-    }
-    document.getElementById('loginErr').style.display='none';
-    const name=customName||emailToName(email);
-    const color=avatarColor(email);
-    pendingUser={name,email,color};
-    const av=document.getElementById('loginAvatar');
-    av.textContent=name[0].toUpperCase();
-    av.style.background=color;
-    document.getElementById('loginWelcomeName').textContent=name;
-    document.getElementById('loginWelcomeEmail').textContent=email;
-    document.getElementById('loginStep1').style.display='none';
-    document.getElementById('loginStep2').style.display='block';
-}
-
-function confirmLogin() {
-    if(!pendingUser) return;
-    localStorage.setItem('vf_user', JSON.stringify(pendingUser));
-    updateUserUI();
-    closeModal('loginModal');
-    toast(`歡迎，${pendingUser.name}！`, 'ok');
-    pendingUser=null;
-}
-
 function doLogout() {
+    // 登出 Google One Tap（避免下次自動登入）
+    if (window.google?.accounts?.id) {
+        try { google.accounts.id.disableAutoSelect(); } catch(e) {}
+    }
+    // 登出 Facebook
+    if (typeof FB !== 'undefined') {
+        try { FB.getLoginStatus(r => { if (r.status==='connected') FB.logout(()=>{}); }); } catch(e) {}
+    }
     localStorage.removeItem('vf_user');
     updateUserUI();
     closeModal('loginModal');
     toast('已成功登出', 'ok');
+    showAuthGate();
 }
 
 function updateUserUI() {
-    const u=JSON.parse(localStorage.getItem('vf_user')||'null');
-    const av=document.getElementById('userAvatar');
-    const nm=document.getElementById('userName');
-    const sb=document.getElementById('userSub');
-    if(u){
-        av.textContent=u.name[0].toUpperCase();
-        av.style.background=u.color;
-        av.style.fontSize='13px';
-        av.querySelector?.('i')?.remove();
-        nm.textContent=u.name;
-        sb.textContent=u.email;
+    const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
+    const av = document.getElementById('userAvatar');
+    const nm = document.getElementById('userName');
+    const sb = document.getElementById('userSub');
+    if (u) {
+        if (u.picture) {
+            av.innerHTML = `<img src="${u.picture}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" referrerpolicy="no-referrer">`;
+            av.style.background = 'transparent';
+        } else {
+            av.innerHTML = '';
+            av.textContent = u.name[0].toUpperCase();
+            av.style.background = u.color || '#555';
+            av.style.fontSize = '13px';
+        }
+        nm.textContent = u.name;
+        sb.textContent = u.email || (u.provider ? u.provider + ' 帳號' : '');
     } else {
-        av.innerHTML='<i class="fas fa-user" style="font-size:11px;color:var(--text-tertiary)"></i>';
-        av.style.background='rgba(255,255,255,.12)';
-        nm.textContent='點擊登入';
-        sb.textContent='訪客模式';
+        av.innerHTML = '<i class="fas fa-user" style="font-size:11px;color:var(--text-tertiary)"></i>';
+        av.style.background = 'rgba(255,255,255,.12)';
+        nm.textContent = '點擊登入';
+        sb.textContent = '訪客模式';
     }
 }
 
@@ -2500,6 +2704,8 @@ function openSettings() {
     document.getElementById('sName').value=gs('siteName');
     document.getElementById('sTitle').value=gs('pageTitle');
     document.getElementById('sApiKey').value=gs('apiKey');
+    document.getElementById('sGoogleClientId').value=gs('googleClientId');
+    document.getElementById('sFacebookAppId').value=gs('facebookAppId');
     document.getElementById('sNewUser').value='';
     document.getElementById('sNewPass').value='';
     document.getElementById('sModelSize').value=gs('modelSize');
@@ -2529,7 +2735,9 @@ function saveSettings() {
     const ms=document.getElementById('sModelSize').value;
     if(name) ss('siteName',name);
     if(title) ss('pageTitle',title);
-    ss('apiKey', apiKey);          // 允許儲存空值（使用者可清除 API 金鑰）
+    ss('apiKey', apiKey);
+    ss('googleClientId', document.getElementById('sGoogleClientId').value.trim());
+    ss('facebookAppId', document.getElementById('sFacebookAppId').value.trim());
     if(nu) ss('adminUser',nu);
     if(np) ss('adminPass',np);
     ss('modelSize',ms);
