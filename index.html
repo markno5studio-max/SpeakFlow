@@ -443,10 +443,10 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <div style="margin-bottom:10px;">
                     <label class="fl">Whisper 模型版本</label>
                     <select class="fs" id="whisperModelSelect" onchange="onWhisperModelChange()">
-                        <option value="tiny">Whisper Tiny (~75MB) · 極速，適合測試</option>
+                        <option value="tiny">Whisper Tiny (~75MB) · 極速，適合快速測試</option>
                         <option value="base">Whisper Base (~141MB) · 輕量均衡</option>
-                        <option value="small" selected>Whisper Small (~483MB) · 推薦★ 繁中優化版</option>
-                        <option value="large">Whisper Large-v3-Turbo (~809MB) · 最高精準度</option>
+                        <option value="small" selected>Whisper Small (~483MB) · ★推薦，繁中/英/日多語言</option>
+                        <option value="medium">Whisper Medium (~1.5GB) · 最高精準度（需 4GB+ RAM）</option>
                     </select>
                 </div>
                 <div class="model-status ms-idle" id="modelStatusBar">
@@ -1016,15 +1016,16 @@ const D = {
 const gs = k => localStorage.getItem('vf_'+k) ?? D[k];
 const ss = (k,v) => localStorage.setItem('vf_'+k, v);
 
-// ── Whisper 模型對照表（@huggingface/transformers@3，支援 onnx-community 模型）──
+// ── Whisper 模型對照表 ──
+// 必須使用 Xenova/ 系列：這是唯一與 transformers.js ASR pipeline 相容的格式
+// onnx-community 模型使用 static KV-cache，需要額外的 cache_position 輸入，
+// 無法直接透過標準 pipeline 呼叫，會報 "Missing input: cache_position" 錯誤。
 const WHISPER_MODELS = {
-    'tiny':  'Xenova/whisper-tiny',
-    'base':  'Xenova/whisper-base',
-    'small': 'onnx-community/whisper-small-chinese-2-ONNX',  // 繁中優化 ~483MB
-    'large': 'onnx-community/whisper-large-v3-turbo-ONNX'    // 極致精準 ~809MB
+    'tiny':   'Xenova/whisper-tiny',     // ~75MB   極速
+    'base':   'Xenova/whisper-base',     // ~141MB  輕量
+    'small':  'Xenova/whisper-small',    // ~483MB  ★推薦，支援繁中/英/日
+    'medium': 'Xenova/whisper-medium'    // ~1.5GB  高精準（需足夠 RAM）
 };
-// ── 函式庫 CDN（v3 起正式支援 onnx-community 大型模型）──
-const HF_TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
 
 // ── OpenCC 繁體轉換器 ──
 let twConverter = null;
@@ -1268,7 +1269,7 @@ async function initLocalModel() {
     if (transcriber) { try { await transcriber.dispose(); } catch(e) {} transcriber = null; }
     localModelLoading = true;
     const key = document.getElementById('whisperModelSelect')?.value || 'small';
-    const modelId = WHISPER_MODELS[key] || 'onnx-community/whisper-small-chinese-2-ONNX';
+    const modelId = WHISPER_MODELS[key] || 'Xenova/whisper-small';
     document.getElementById('startBtn').disabled = true;
     document.getElementById('disposeModelBtn').style.display = 'none';
 
@@ -1286,7 +1287,8 @@ async function initLocalModel() {
 
     const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
     env.allowLocalModels = false;
-    env.useBrowserCache = true;
+    env.useBrowserCache = true;   // ← 模型下載後永久快取於瀏覽器，不重複下載
+    env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/';
 
     // 先嘗試 WebGPU，失敗自動降級 WASM
     let device = await detectDevice();
@@ -1631,7 +1633,7 @@ async function runLocalTranscription(lt) {
         if (isOrtErr) {
             lt.textContent = 'WebGPU 推理失敗，切換至 CPU(WASM) 模式重試...';
             const key = document.getElementById('whisperModelSelect')?.value || 'small';
-            const modelId = WHISPER_MODELS[key] || 'onnx-community/whisper-small-chinese-2-ONNX';
+            const modelId = WHISPER_MODELS[key] || 'Xenova/whisper-small';
             try { await transcriber.dispose(); } catch(e) {}
             const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
             env.allowLocalModels = false; env.useBrowserCache = true;
