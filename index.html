@@ -309,8 +309,9 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
 .trash-days{font-size:10.5px;color:var(--accent-red);margin-top:2px;}
 
 /* ─── TRANSCRIPT LINES ─── */
-.tr-line{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:5px;margin-bottom:4px;transition:background .12s;}
+.tr-line{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:5px;margin-bottom:4px;transition:background .12s,border-left .12s;}
 .tr-line:hover{background:rgba(255,255,255,.04);}
+.tr-line.playing{background:rgba(var(--primary-rgb),.10);border-left:3px solid var(--primary);padding-left:3px;}
 .tr-tc{font-family:'SF Mono',Consolas,monospace;font-size:11px;color:var(--tc-color,rgba(255,255,255,.45));white-space:nowrap;padding:3px 6px;background:var(--tc-bg,rgba(255,255,255,.05));border:1px solid var(--tc-border,rgba(255,255,255,.08));border-radius:4px;cursor:default;user-select:none;line-height:1.6;flex-shrink:0;}
 .tr-txt{flex:1;outline:none;line-height:1.8;border-bottom:1px solid transparent;transition:border-color .12s;}
 .tr-txt:focus{border-bottom-color:rgba(var(--primary-rgb),.4);}
@@ -1119,7 +1120,9 @@ window.onload = () => {
     if (tds) tds.value = getTrashDays();
 
     document.querySelectorAll('.overlay').forEach(o=>{
-        o.addEventListener('click', e=>{ if(e.target===o && o.id!=='loadingModal') closeModal(o.id); });
+        // authGate 是強制登入牆，不可被點擊背景關閉；loadingModal 不可手動關閉
+        const noClose = ['loadingModal', 'authGate'];
+        o.addEventListener('click', e=>{ if(e.target===o && !noClose.includes(o.id)) closeModal(o.id); });
     });
     document.getElementById('gatePass').addEventListener('keydown', e=>{ if(e.key==='Enter') doAdminLogin(); });
     initAllCPW();
@@ -1728,7 +1731,15 @@ function pickFile(file) {
     el.src=url;
     el.onloadedmetadata=()=>{ audioDuration=el.duration; initSeekBar(el); };
     el.ontimeupdate=()=>{ updateLiveSub(el.currentTime); updateSeekBar(el); };
-    el.onended=()=>{ const pi=document.getElementById('playIcon'); if(pi) pi.className='fas fa-play'; };
+    el.onended=()=>{
+        const pi=document.getElementById('playIcon'); if(pi) pi.className='fas fa-play';
+        // 播放結束：清除逐字稿高亮
+        if(_lastPlayIdx>=0){
+            const old=document.querySelector(`.tr-line[data-i="${_lastPlayIdx}"]`);
+            if(old) old.classList.remove('playing');
+            _lastPlayIdx=-1;
+        }
+    };
     currentMedia=el;
     mc.appendChild(el);
 
@@ -2056,6 +2067,7 @@ function finishTranscription() {
 // ══════════════════════════════════════════
 function renderResults() {
     if(!parsedResult?.transcript) return;
+    _lastPlayIdx = -1; // 重新渲染後重置高亮狀態
     // 每次渲染前從 localStorage 重新載入詞庫，確保最新關鍵字生效
     try { const s=localStorage.getItem('fatKeywords'); if(s) fatKeywords=JSON.parse(s); } catch{}
     const useFH=document.getElementById('enableFatHighlight').checked;
@@ -3097,15 +3109,45 @@ function doReplaceAll() {
     toast(`已取代 ${count} 處`, 'ok');
 }
 
+let _lastPlayIdx = -1; // 記錄上次高亮的行，避免重複 DOM 操作
+
 function updateLiveSub(t) {
     if(!parsedResult?.transcript) return;
-    const ov=document.getElementById('subOv');
-    let txt='';
-    for(const l of parsedResult.transcript){
-        if(!l.start||!l.end) continue;
-        if(t>=t2s(l.start)&&t<=t2s(l.end)){ txt=l.text; break; }
+    const ov = document.getElementById('subOv');
+    const tb = document.getElementById('transcriptBox');
+    let txt = '', activeIdx = -1;
+
+    for(let i=0; i<parsedResult.transcript.length; i++){
+        const l = parsedResult.transcript[i];
+        if(!l.start || !l.end) continue;
+        const ls = t2s(l.start), le = t2s(l.end);
+        if(t >= ls && t <= le){ txt = l.text; activeIdx = i; break; }
+        // 若時間落在兩段之間，高亮較近的前一段（避免高亮空白）
+        if(t >= ls && (i+1 >= parsedResult.transcript.length || t < t2s(parsedResult.transcript[i+1]?.start||'99:00:00,000'))){
+            txt = l.text; activeIdx = i;
+        }
     }
-    ov.textContent=txt;
+
+    ov.textContent = txt;
+
+    // 高亮逐字稿對應行（只在 activeIdx 改變時更新 DOM）
+    if (activeIdx !== _lastPlayIdx && tb) {
+        // 移除舊高亮
+        if (_lastPlayIdx >= 0) {
+            const old = tb.querySelector(`.tr-line[data-i="${_lastPlayIdx}"]`);
+            if (old) old.classList.remove('playing');
+        }
+        // 加上新高亮並滾動至可見區域
+        if (activeIdx >= 0) {
+            const cur = tb.querySelector(`.tr-line[data-i="${activeIdx}"]`);
+            if (cur) {
+                cur.classList.add('playing');
+                // 平滑捲動讓該行進入視野（不搶奪焦點）
+                cur.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+        _lastPlayIdx = activeIdx;
+    }
 }
 
 function t2s(str){ try{ const p=str.split(':'),sp=p[2].split(','); return +p[0]*3600+ +p[1]*60+ +sp[0]+ +sp[1]/1000; }catch{return 0;} }
@@ -3166,13 +3208,15 @@ function onTrNameChange() {
 function calcSplitTime(cur, idx, beforeRatio) {
     const tr = parsedResult.transcript;
 
-    // 1️⃣ 優先：媒體播放器目前位置（剪輯模式）
-    if (currentMedia && currentMedia.duration > 0) {
+    // 1️⃣ 優先：媒體「正在播放中」→ 用播放頭位置（即時剪輯模式，仿剪輯軟體行為）
+    // ⚠ 暫停中不使用播放頭：暫停時播放頭可能停在與游標無關的位置
+    if (currentMedia && !currentMedia.paused && currentMedia.duration > 0) {
         const pos = currentMedia.currentTime;
         if (pos > 0) return pos;
     }
 
-    // 2️⃣ 次選：當前段落有合法時間範圍 → 依文字比例插值
+    // 2️⃣ 暫停或無媒體：依游標在文字中的位置比例插值段落時間範圍
+    //    → 這正是剪輯軟體「在時間軸上點擊截斷點」的等效邏輯
     const cStart = srtToSecs(cur.start);
     const cEnd   = srtToSecs(cur.end);
     if (cEnd > cStart) {
