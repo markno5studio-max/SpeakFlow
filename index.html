@@ -2953,63 +2953,105 @@ function onTrNameChange() {
 // ══════════════════════════════════════════
 // 逐字稿 Enter 鍵斷行（自動分配時間碼）
 // ══════════════════════════════════════════
+
+// 計算截斷秒數的核心邏輯（獨立函式，方便單元測試）
+function calcSplitTime(cur, idx, beforeRatio) {
+    const tr = parsedResult.transcript;
+
+    // 1️⃣ 優先：媒體播放器目前位置（剪輯模式）
+    if (currentMedia && currentMedia.duration > 0) {
+        const pos = currentMedia.currentTime;
+        if (pos > 0) return pos;
+    }
+
+    // 2️⃣ 次選：當前段落有合法時間範圍 → 依文字比例插值
+    const cStart = srtToSecs(cur.start);
+    const cEnd   = srtToSecs(cur.end);
+    if (cEnd > cStart) {
+        return cStart + (cEnd - cStart) * Math.max(0.05, Math.min(0.95, beforeRatio));
+    }
+
+    // 3️⃣ 備選 A：只有 start，沒有 end → start + 比例 × (下一段 start - 此 start)
+    if (cStart > 0) {
+        const next = tr[idx + 1];
+        const nextStart = next ? srtToSecs(next.start) : 0;
+        if (nextStart > cStart) {
+            return cStart + (nextStart - cStart) * Math.max(0.05, Math.min(0.95, beforeRatio));
+        }
+        // 預估：每段約 3 秒
+        return cStart + 3 * Math.max(0.1, beforeRatio);
+    }
+
+    // 4️⃣ 備選 B：完全沒有時間碼 → 用前一段結尾或索引估算
+    const prev = tr[idx - 1];
+    const prevEnd = prev ? srtToSecs(prev.end || prev.start) : 0;
+    if (prevEnd > 0) return prevEnd + 2;
+
+    // 最後手段：index × 3s（假設每段約 3 秒）
+    return idx * 3;
+}
+
 function initTranscriptKeyHandler() {
     document.getElementById('transcriptBox').addEventListener('keydown', function(e) {
         if (e.key !== 'Enter') return;
         const span = e.target.closest('.tr-txt');
         if (!span || !parsedResult?.transcript) return;
         e.preventDefault();
+
         const idx = parseInt(span.dataset.i);
-        // 取得游標位置
         const sel = window.getSelection();
         if (!sel.rangeCount) return;
         const range = sel.getRangeAt(0);
+
         // 取得游標前後文字
-        const fullText = span.innerText || '';
-        const preRange = document.createRange();
+        const fullText  = span.innerText || '';
+        const preRange  = document.createRange();
         preRange.setStart(span, 0);
         preRange.setEnd(range.startContainer, range.startOffset);
         const beforeText = preRange.toString();
-        const afterText = fullText.slice(beforeText.length);
-        // 更新當前行
+        const afterText  = fullText.slice(beforeText.length);
+        const beforeRatio = fullText.length > 0 ? beforeText.length / fullText.length : 0.5;
+
+        // 更新當前行文字
         parsedResult.transcript[idx].text = beforeText.trim();
-        // 計算截斷時間碼
-        const cur = parsedResult.transcript[idx];
-        const curStart = srtToSecs(cur.start);
-        const curEnd   = srtToSecs(cur.end);
-        const hasValidRange = cur.start && cur.end && curEnd > curStart;
-        let splitTime;
-        const playPos = currentMedia ? currentMedia.currentTime : null;
-        if (playPos !== null && playPos > 0) {
-            // 有播放位置時：優先以媒體當前秒數為截斷點
-            if (hasValidRange && playPos > curStart && playPos < curEnd) {
-                splitTime = playPos; // 精確落在段落範圍內
-            } else if (!hasValidRange) {
-                splitTime = playPos; // 無原始時間碼 → 直接用播放位置
-            } else {
-                const ratio = fullText.length > 0 ? Math.max(0.05, Math.min(0.95, beforeText.length / fullText.length)) : 0.5;
-                splitTime = curStart + (curEnd - curStart) * ratio;
-            }
-        } else {
-            const ratio = fullText.length > 0 ? Math.max(0.05, Math.min(0.95, beforeText.length / fullText.length)) : 0.5;
-            splitTime = hasValidRange ? curStart + (curEnd - curStart) * ratio : 0;
-        }
-        // 若原始段落無時間碼，補上推算的時間碼（不覆蓋已有值，包含合法的 00:00:00,000）
-        if (!cur.start) {
-            cur.start = secsToSRT(Math.max(0, splitTime - 2));
-        }
-        const newEnd = cur.end ? cur.end : secsToSRT(splitTime + 3);
-        const newEntry = { start: secsToSRT(splitTime), end: newEnd, speaker: cur.speaker||'', text: afterText.trim() };
-        cur.end = secsToSRT(splitTime);
-        // 分割後自動顯示時間碼
+
+        // 計算截斷秒數
+        const cur       = parsedResult.transcript[idx];
+
+        // ★ 必須在修改 cur 之前先儲存原始 end
+        const origEnd   = cur.end || '';
+        const splitTime = calcSplitTime(cur, idx, beforeRatio);
+
+        // 為原始段落補上缺失的 start/end
+        if (!cur.start) cur.start = secsToSRT(Math.max(0, splitTime - 3));
+        cur.end = secsToSRT(splitTime); // 原段落結尾 = 截斷點
+
+        // 新段落：start = 截斷點，end = 繼承原始 end（若 end > splitTime）否則估算
+        const newEntryEnd = (srtToSecs(origEnd) > splitTime)
+            ? origEnd
+            : secsToSRT(splitTime + 3);
+
+        const newEntry = {
+            start:   secsToSRT(splitTime),
+            end:     newEntryEnd,
+            speaker: cur.speaker || '',
+            text:    afterText.trim()
+        };
+
+        // 強制顯示時間碼
         const tsChk = document.getElementById('enableTimestamps');
-        if (tsChk && !tsChk.checked) tsChk.checked = true;
-        // 插入新行
+        if (tsChk) tsChk.checked = true;
+
+        // 插入並重繪
         parsedResult.transcript.splice(idx + 1, 0, newEntry);
         renderResults();
-        // 聚焦新行
+
+        // Toast 確認
+        toast(`✂ ${formatTC(newEntry.start)} ← 截斷點`, 'ok');
+
+        // 聚焦新行首位
         setTimeout(() => {
-            const newSpan = document.querySelector(`.tr-txt[data-i="${idx+1}"]`);
+            const newSpan = document.querySelector(`.tr-txt[data-i="${idx + 1}"]`);
             if (newSpan) { newSpan.focus(); placeCaretAtStart(newSpan); }
         }, 30);
     });
@@ -3096,15 +3138,15 @@ function secsToSRTTime(t) {
     const ms = String(d.getUTCMilliseconds()).padStart(3, '0');
     return `${hh}:${mm}:${ss},${ms}`;
 }
-function exportSRT() {
+async function exportSRT() {
     if (!parsedResult?.transcript) { toast('無轉錄結果', 'err'); return; }
-    // 允許匯出：若有任何一行有時間碼即可；無時間碼則全用 0
+
+    // 統一把各種格式的時間碼轉成合法 SRT 字串
     const toSRTStr = v => {
         if (v == null || v === '') return '00:00:00,000';
         if (typeof v === 'number') return secsToSRTTime(v);
-        const s = String(v);
-        // Already HH:MM:SS,mmm or HH:MM:SS.mmm
-        if (s.includes(',') || s.includes(':')) return s.replace('.', ',');
+        const s = String(v).trim();
+        if (s.includes(':')) return s.includes(',') ? s : s.replace('.', ',');
         return secsToSRTTime(parseFloat(s) || 0);
     };
 
@@ -3114,24 +3156,43 @@ function exportSRT() {
         if (!l.text?.trim()) return;
         const startStr = toSRTStr(l.start);
         const endStr   = toSRTStr(l.end || l.start);
-        // SRT 規格：CRLF 換行，entry 間空行
+        // SRT 規格：每條目內用 CRLF；條目間以空行分隔
         srtLines.push(`${seq}\r\n${startStr} --> ${endStr}\r\n${l.text.trim()}\r\n`);
         seq++;
     });
     if (!srtLines.length) { toast('沒有可匯出的字幕段落', 'err'); return; }
 
-    // UTF-8 BOM + CRLF：Premiere / DaVinci / Final Cut / Resolve 最佳相容
+    // UTF-8 BOM + CRLF — Premiere / DaVinci / Final Cut / Resolve 最佳相容
     const srtContent = '﻿' + srtLines.join('\r\n') + '\r\n';
+    const fname = safeFilename(currentProjectName) + '.srt';
+
+    // ── 優先使用 File System Access API（不觸發 macOS quarantine 警告）──
+    if (window.showSaveFilePicker) {
+        try {
+            const handle = await window.showSaveFilePicker({
+                suggestedName: fname,
+                types: [{ description: 'SubRip Subtitle (.srt)', accept: { 'text/plain': ['.srt'] } }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(new Blob([srtContent], { type: 'text/plain;charset=utf-8' }));
+            await writable.close();
+            toast('SRT 已儲存 ✓（系統對話框，無防毒警告）', 'ok');
+            return;
+        } catch(e) {
+            if (e.name === 'AbortError') return; // 使用者取消，靜默退出
+            // 其他錯誤降級至 blob 下載
+        }
+    }
+
+    // ── 降級：blob 下載（Safari / Firefox）──
     const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href     = url;
-    link.download = safeFilename(currentProjectName) + '.srt';
-    document.body.appendChild(link);
-    link.click();
+    link.href = url; link.download = fname;
+    document.body.appendChild(link); link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast('SRT 已匯出 ✓  若 Mac 警告無法開啟，請右鍵 → 開啟', 'ok');
+    toast('SRT 已下載 ✓  如 Mac 顯示安全警告，請右鍵檔案 → 開啟', 'ok');
 }
 function exportTXT() {
     const fname = safeFilename(currentProjectName) + '.txt';
