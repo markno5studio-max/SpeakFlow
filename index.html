@@ -1665,7 +1665,7 @@ async function runLocalTranscription(lt) {
     const maxCh = document.getElementById('maxChars').value;
     const whisperLang = WHISPER_LANG[langCode] || 'zh';
     lt.textContent = `Whisper 本地辨識中（語言：${LANG_DISPLAY[langCode]}，依音訊長度可能需數分鐘）...`;
-    const opts = { chunk_length_s: 28, stride_length_s: 4, language: whisperLang, task: 'transcribe', return_timestamps: true };
+    const opts = { chunk_length_s: 28, stride_length_s: 4, language: whisperLang, task: 'transcribe', return_timestamps: true, sampling_rate: 16000 };
     let result;
     try {
         result = await transcriber(audioData, opts);
@@ -2889,8 +2889,14 @@ function initResizers() {
 function safeFilename(name) { return (name||'transcript').replace(/[\\/:*?"<>|]/g,'_'); }
 // 秒數 → SRT 時間戳 HH:MM:SS,mmm
 function secsToSRTTime(t) {
-    const h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=Math.floor(t%60),ms=Math.round((t%1)*1000);
-    return `${p2(h)}:${p2(m)}:${p2(s)},${String(ms).padStart(3,'0')}`;
+    // Date-based: avoids floating-point rounding bugs (e.g. Math.round giving ms=1000)
+    // Use Math.floor(t/3600) for hours so values ≥ 24 h are not wrapped by getUTCHours()
+    const d  = new Date(Math.round(t * 1000));
+    const hh = String(Math.floor(t / 3600)).padStart(2, '0');
+    const mm = String(d.getUTCMinutes()).padStart(2, '0');
+    const ss = String(d.getUTCSeconds()).padStart(2, '0');
+    const ms = String(d.getUTCMilliseconds()).padStart(3, '0');
+    return `${hh}:${mm}:${ss},${ms}`;
 }
 function exportSRT() {
     if (!parsedResult?.transcript) { toast('無轉錄結果', 'err'); return; }
