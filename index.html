@@ -1,0 +1,2926 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title id="pageTitle">VoiceFlow AI Pro</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
+<link id="gFontsLink" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Noto+Serif+TC:wght@400;700&family=Nunito:wght@400;700&display=swap">
+<style>
+:root {
+    --primary:#d4a254; --primary-dark:#b8862e; --primary-rgb:212,162,84;
+    --bg:#0b0b0f; --bg-elevated:#131318; --bg-surface:#1a1a24;
+    --bg-card:#16161e; --bg-input:#0e0e16;
+    --text-primary:#ededf5; --text-secondary:#8888a8; --text-tertiary:#50506a;
+    --border:rgba(255,255,255,0.07); --border-hover:rgba(255,255,255,0.13);
+    --border-focus:rgba(212,162,84,0.5);
+    --accent-red:#f06060; --accent-green:#3dd49a;
+    --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:20px;
+    --shadow:0 8px 40px rgba(0,0,0,.7);
+    --t:all .18s cubic-bezier(.4,0,.2,1);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text-primary);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:2px}
+
+/* ─── LAYOUT ─── */
+.app{display:flex;height:100vh;overflow:hidden;}
+
+/* ─── SIDEBAR ─── */
+.sidebar{width:232px;background:var(--bg-elevated);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.sb-head{padding:16px 13px;border-bottom:1px solid var(--border);}
+.logo{display:flex;align-items:center;gap:8px;}
+.logo-ico{width:30px;height:30px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;box-shadow:0 0 14px rgba(var(--primary-rgb),.3);}
+.logo-name{font-size:14px;font-weight:700;letter-spacing:-.3px;}
+.logo-badge{font-size:8px;font-weight:800;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:1px 5px;border-radius:4px;margin-left:auto;letter-spacing:.5px;}
+.nav{flex:1;padding:7px;overflow-y:auto;}
+.nav-lbl{font-size:9.5px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.8px;padding:10px 8px 4px;}
+.ni{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:var(--r-sm);color:var(--text-secondary);cursor:pointer;transition:var(--t);font-size:13px;font-weight:500;margin-bottom:1px;}
+.ni i{width:14px;text-align:center;font-size:12px;}
+.ni:hover{background:rgba(255,255,255,.05);color:var(--text-primary);}
+.ni.active{background:rgba(var(--primary-rgb),.12);color:var(--primary);}
+
+/* user footer */
+.sb-foot{border-top:1px solid var(--border);}
+.user-row{display:flex;align-items:center;gap:9px;padding:11px 12px;cursor:pointer;transition:var(--t);}
+.user-row:hover{background:rgba(255,255,255,.04);}
+.avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;background:rgba(255,255,255,.12);}
+.user-info{flex:1;min-width:0;}
+.user-name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.user-sub{font-size:10.5px;color:var(--text-tertiary);}
+.sb-settings{display:flex;align-items:center;gap:9px;padding:9px 12px;cursor:pointer;transition:var(--t);font-size:12.5px;font-weight:500;color:var(--text-secondary);border-top:1px solid var(--border);}
+.sb-settings:hover{background:rgba(255,255,255,.04);color:var(--text-primary);}
+
+/* ─── MAIN ─── */
+.main{flex:1;overflow-y:auto;background:var(--bg);}
+.inner{max-width:1060px;margin:0 auto;padding:30px 34px;}
+.section{display:none;}
+.section.active{display:block;animation:fs .22s ease;}
+@keyframes fs{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+.ph{margin-bottom:22px;}
+.ph h2{font-size:20px;font-weight:700;letter-spacing:-.4px;margin-bottom:2px;}
+.ph p{color:var(--text-secondary);font-size:13px;}
+
+/* ─── CARD ─── */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);padding:20px;margin-bottom:16px;}
+.c-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.c-ttl{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px;letter-spacing:-.2px;}
+.c-ttl i{color:var(--primary);font-size:13px;}
+
+/* ─── UPLOAD ─── */
+.upload{border:2px dashed rgba(255,255,255,.09);border-radius:var(--r-md);padding:40px 24px;text-align:center;cursor:pointer;transition:var(--t);background:var(--bg-input);}
+.upload:hover,.upload.drag{border-color:rgba(var(--primary-rgb),.45);background:rgba(var(--primary-rgb),.04);}
+.up-icon{width:58px;height:58px;background:rgba(var(--primary-rgb),.1);border:1px solid rgba(var(--primary-rgb),.2);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;}
+.up-icon i{font-size:22px;color:var(--primary);}
+.upload h3{font-size:14px;font-weight:700;margin-bottom:5px;}
+.upload p{font-size:11.5px;color:var(--text-secondary);line-height:1.7;}
+.warn{color:var(--accent-red)!important;}
+.fbar{display:flex;align-items:center;gap:9px;padding:10px 13px;background:rgba(var(--primary-rgb),.08);border:1px solid rgba(var(--primary-rgb),.2);border-radius:var(--r-md);margin-top:9px;}
+.fbar i{color:var(--primary);}
+.fbar .fn{font-weight:600;font-size:13px;}
+.fbar .fs{color:var(--text-secondary);font-size:11px;margin-left:auto;}
+
+/* ─── FORM ─── */
+.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:13px;}
+.fl{display:block;font-size:10.5px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+.fi,.fs{width:100%;padding:8px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-primary);font-size:13px;font-weight:500;font-family:inherit;transition:var(--t);}
+.fi:focus,.fs:focus{outline:none;border-color:var(--border-focus);}
+.fs option{background:var(--bg-surface);}
+
+/* toggle chips */
+.opt-strip{display:flex;flex-wrap:wrap;gap:6px;padding:12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);margin:12px 0;}
+.tog{display:flex;align-items:center;gap:7px;padding:5px 11px;border-radius:20px;border:1px solid var(--border);background:var(--bg-elevated);cursor:pointer;transition:var(--t);font-size:12px;font-weight:600;color:var(--text-secondary);user-select:none;}
+.tog input{display:none;}
+.td{width:12px;height:12px;border-radius:50%;border:2px solid var(--text-tertiary);transition:var(--t);}
+.tog:has(input:checked){border-color:rgba(var(--primary-rgb),.4);background:rgba(var(--primary-rgb),.1);color:var(--primary);}
+.tog:has(input:checked) .td{background:var(--primary);border-color:var(--primary);}
+.tog:has(input:disabled){opacity:.4;cursor:not-allowed;}
+
+/* buttons */
+.btn{padding:8px 15px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-surface);color:var(--text-primary);font-size:12.5px;font-weight:600;cursor:pointer;transition:var(--t);display:inline-flex;align-items:center;gap:6px;font-family:inherit;}
+.btn:hover:not(:disabled){background:var(--bg-elevated);border-color:var(--border-hover);}
+.btn-p{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border-color:transparent;box-shadow:0 0 16px rgba(var(--primary-rgb),.2);}
+.btn-p:hover:not(:disabled){box-shadow:0 0 24px rgba(var(--primary-rgb),.36);transform:translateY(-1px);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn-full{width:100%;justify-content:center;padding:11px 18px;font-size:13.5px;}
+.btn-danger{color:var(--accent-red);border-color:rgba(240,96,96,.3);background:rgba(240,96,96,.07);}
+.btn-danger:hover:not(:disabled){background:rgba(240,96,96,.14);}
+
+/* ─── MODEL STATUS ─── */
+.model-status{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--bg-input);margin:10px 0;font-size:12.5px;font-weight:600;}
+.ms-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.ms-idle .ms-dot{background:var(--text-tertiary);}
+.ms-loading .ms-dot{background:var(--primary);animation:pulse 1s infinite;}
+.ms-ready .ms-dot{background:var(--accent-green);}
+.ms-error .ms-dot{background:var(--accent-red);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.prog-bar{height:4px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;margin-top:6px;}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--primary-dark));width:0%;transition:width .3s;}
+
+/* ─── STATS ─── */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:18px;}
+.stat{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);padding:13px 16px;}
+.sv{font-size:22px;font-weight:800;color:var(--primary);letter-spacing:-.8px;line-height:1;margin-bottom:2px;}
+.sl{font-size:10px;font-weight:700;color:var(--text-tertiary);text-transform:uppercase;letter-spacing:.5px;}
+
+/* ─── EDITOR ─── */
+.ed-wrap{display:flex;gap:16px;flex-wrap:wrap;}
+.prev-pane{flex:1;min-width:260px;background:#000;border-radius:var(--r-lg);position:relative;overflow:hidden;aspect-ratio:16/9;border:1px solid rgba(255,255,255,.08);}
+.prev-pane video{width:100%;height:100%;object-fit:contain;}
+/* safe-zone styles moved below */
+.sub-ov{position:absolute;text-align:center;word-wrap:break-word;pointer-events:none;transition:all .12s ease;line-height:1.4;}
+.ctrl-pane{width:276px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);padding:16px;}
+.gp{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:80px;margin:7px auto 13px;}
+.gb{aspect-ratio:1;border:1px solid var(--border);background:var(--bg-input);border-radius:3px;cursor:pointer;transition:var(--t);}
+.gb:hover{border-color:rgba(var(--primary-rgb),.4);}
+.gb.active{background:var(--primary);border-color:var(--primary-dark);}
+.tr-area{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;}
+.tr-card{flex:2;min-width:260px;}
+.ch-card{flex:1;min-width:190px;display:none;}
+.tr-box{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;min-height:240px;font-size:13.5px;white-space:pre-wrap;outline:none;transition:var(--t);line-height:1.9;}
+.tr-box:focus{border-color:var(--border-focus);}
+mark.fh{background:rgba(var(--primary-rgb),.22);color:var(--text-primary);padding:0 3px;border-radius:3px;font-weight:800;border-bottom:2px solid var(--primary);}
+.sp-tag{display:inline-flex;align-items:center;padding:1px 6px;background:rgba(74,124,247,.14);color:#7aaaf8;border-radius:4px;font-size:10px;font-weight:800;margin-right:6px;}
+.ts-tag{color:var(--primary);font-size:10px;font-weight:700;margin-right:6px;opacity:.75;}
+.ch-list{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:5px;max-height:200px;overflow-y:auto;}
+.chi{display:flex;gap:9px;padding:6px 8px;border-radius:4px;transition:var(--t);}
+.chi:hover{background:rgba(255,255,255,.03);}
+.cht{color:var(--primary);font-weight:700;font-size:11px;white-space:nowrap;}
+.chl{font-size:12px;color:var(--text-secondary);}
+
+/* ─── PROJECTS ─── */
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+.proj-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-lg);padding:18px;cursor:pointer;transition:var(--t);}
+.proj-card:hover{border-color:rgba(var(--primary-rgb),.3);background:rgba(var(--primary-rgb),.03);}
+.pc-hd{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
+.pc-ico{width:34px;height:34px;background:rgba(var(--primary-rgb),.1);border:1px solid rgba(var(--primary-rgb),.2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--primary);font-size:13px;}
+.pc-name{font-size:13px;font-weight:700;line-height:1.3;flex:1;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.pc-date{font-size:10.5px;color:var(--text-tertiary);margin-top:2px;}
+.pc-preview{font-size:11.5px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.pc-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.pc-tag{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--bg-surface);border:1px solid var(--border);color:var(--text-secondary);}
+.pc-actions{display:flex;gap:6px;margin-left:auto;}
+.empty-state{text-align:center;padding:60px 20px;}
+.empty-state i{font-size:44px;color:var(--text-tertiary);margin-bottom:14px;}
+.empty-state h3{font-size:15px;font-weight:700;margin-bottom:6px;}
+.empty-state p{font-size:12.5px;color:var(--text-secondary);}
+
+/* ─── KEYWORDS ─── */
+.kw-tag{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:20px;font-size:12px;font-weight:600;}
+.kw-rm{color:var(--accent-red);cursor:pointer;font-size:10px;opacity:.7;transition:var(--t);}
+.kw-rm:hover{opacity:1;}
+
+/* ─── MODALS ─── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);z-index:10000;align-items:center;justify-content:center;}
+.overlay.show{display:flex;}
+.mbox{background:var(--bg-elevated);border:1px solid var(--border-hover);border-radius:var(--r-xl);padding:26px;width:90%;box-shadow:var(--shadow);}
+.mbox.sm{max-width:360px;}
+.mbox.md{max-width:480px;}
+.mbox.lg{max-width:580px;}
+.m-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.m-ttl{font-size:15px;font-weight:700;letter-spacing:-.3px;}
+.m-close{width:26px;height:26px;border-radius:50%;background:var(--bg-surface);border:1px solid var(--border);color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:var(--t);}
+.m-close:hover{color:var(--text-primary);}
+
+/* loading */
+.load-body{text-align:center;padding:6px 0;}
+.spin{width:46px;height:46px;border:3px solid rgba(255,255,255,.07);border-top-color:var(--primary);border-radius:50%;animation:spin .75s linear infinite;margin:0 auto 16px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.load-t{font-size:14px;font-weight:700;margin-bottom:5px;}
+.load-s{font-size:12px;color:var(--text-secondary);}
+
+/* ─── SETTINGS TABS ─── */
+.tab-bar{display:flex;gap:3px;margin-bottom:16px;background:var(--bg-input);padding:4px;border-radius:var(--r-md);}
+.tab-btn{flex:1;padding:7px;border-radius:7px;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;font-size:12px;font-weight:600;transition:var(--t);font-family:inherit;}
+.tab-btn:hover{color:var(--text-primary);}
+.tab-btn.active{background:var(--bg-elevated);color:var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.4);}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+.s-scroll{max-height:60vh;overflow-y:auto;padding-right:3px;}
+.s-sec{margin-bottom:18px;}
+.s-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-tertiary);margin-bottom:9px;}
+.divider{border:none;border-top:1px solid var(--border);margin:15px 0;}
+
+/* ─── COLOR PICKER WIDGET ─── */
+.cpw{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.cpw-wrap{position:relative;}
+.cpw-swatch{width:62px;height:48px;border-radius:10px;cursor:pointer;display:block;border:2px solid rgba(255,255,255,.1);transition:var(--t);}
+.cpw-swatch:hover{border-color:rgba(255,255,255,.25);}
+.cpw-native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;}
+.cpw-hex{width:100px;padding:7px 9px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-primary);font-size:13px;font-weight:700;font-family:'Consolas','Courier New',monospace;letter-spacing:.5px;}
+.cpw-hex:focus{outline:none;border-color:var(--border-focus);}
+.cpw-presets{display:flex;gap:5px;flex-wrap:wrap;align-items:center;}
+.cpp{width:24px;height:24px;border-radius:5px;cursor:pointer;border:2px solid transparent;transition:var(--t);flex-shrink:0;}
+.cpp:hover{transform:scale(1.12);border-color:rgba(255,255,255,.3);}
+.cpp.sel{border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.3);}
+.cpw-label{font-size:11.5px;font-weight:700;color:var(--text-secondary);white-space:nowrap;width:72px;flex-shrink:0;}
+
+/* ─── LOGIN MODAL ─── */
+.social-btns{display:flex;flex-direction:column;gap:9px;margin-bottom:14px;}
+.social-btn{display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--bg-input);cursor:pointer;transition:var(--t);font-size:13px;font-weight:600;font-family:inherit;color:var(--text-primary);}
+.social-btn:hover{background:var(--bg-surface);border-color:var(--border-hover);}
+.social-btn .sb-ico{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.google-ico{background:#fff;color:#4285f4;}
+.fb-ico{background:#1877f2;color:#fff;}
+.or-divider{display:flex;align-items:center;gap:10px;margin:12px 0;}
+.or-divider::before,.or-divider::after{content:'';flex:1;height:1px;background:var(--border);}
+.or-divider span{font-size:11.5px;color:var(--text-tertiary);font-weight:700;}
+.err-msg{color:var(--accent-red);font-size:11.5px;margin-top:6px;display:none;}
+
+/* toast */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg-elevated);border:1px solid var(--border-hover);border-radius:var(--r-md);padding:10px 16px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;box-shadow:var(--shadow);z-index:99999;transform:translateY(50px);opacity:0;transition:all .26s cubic-bezier(.34,1.56,.64,1);}
+.toast.show{transform:translateY(0);opacity:1;}
+.toast.ok{border-color:rgba(61,212,154,.35);}
+.toast.ok i{color:var(--accent-green);}
+.toast.err{border-color:rgba(240,96,96,.35);}
+.toast.err i{color:var(--accent-red);}
+input[type="color"]{-webkit-appearance:none;cursor:pointer;}
+input[type="color"]::-webkit-color-swatch-wrapper{padding:0;}
+input[type="color"]::-webkit-color-swatch{border:none;border-radius:3px;}
+input[type="range"]{width:100%;accent-color:var(--primary);}
+textarea.fi{resize:vertical;}
+
+/* ─── PLAY BAR ─── */
+.play-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);}
+.play-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:var(--t);flex-shrink:0;}
+.play-btn:hover{background:rgba(var(--primary-rgb),.15);border-color:rgba(var(--primary-rgb),.4);}
+.seek-bar{flex:1;height:4px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.12);border-radius:2px;cursor:pointer;outline:none;}
+.seek-bar::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--primary);cursor:pointer;}
+.time-disp{font-size:10.5px;color:var(--text-tertiary);font-variant-numeric:tabular-nums;white-space:nowrap;}
+.speed-sel{padding:3px 6px;font-size:11px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);cursor:pointer;font-family:inherit;}
+
+/* ─── FIND / REPLACE BAR ─── */
+.find-bar{background:rgba(var(--primary-rgb),.05);border:1px solid rgba(var(--primary-rgb),.18);border-radius:var(--r-md);padding:9px 12px;margin-bottom:10px;}
+.find-row{display:flex;gap:5px;margin-bottom:5px;align-items:center;}
+.find-row:last-child{margin-bottom:0;}
+.find-in{flex:1;padding:5px 9px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-primary);font-size:12.5px;font-family:inherit;outline:none;}
+.find-in:focus{border-color:var(--border-focus);}
+.find-count{font-size:10.5px;color:var(--text-tertiary);white-space:nowrap;min-width:60px;}
+mark.fnd{background:rgba(255,200,50,.35);color:var(--text-primary);padding:0 1px;border-radius:2px;}
+mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
+
+/* ─── SAFE ZONE (improved) ─── */
+.safe-zone{position:absolute;pointer-events:none;display:none;box-sizing:border-box;}
+.safe-zone .sz-border{position:absolute;inset:0;border:2.5px dashed rgba(255,80,80,.9);border-radius:2px;}
+.safe-zone .sz-label{position:absolute;top:0;left:50%;transform:translateX(-50%);background:rgba(220,50,50,.85);color:#fff;font-size:9.5px;font-weight:700;padding:2px 9px;border-radius:0 0 6px 6px;white-space:nowrap;}
+.sz-corner{position:absolute;width:16px;height:16px;border-color:rgba(255,80,80,.9);border-style:solid;}
+.sz-tl{top:-2px;left:-2px;border-width:3px 0 0 3px;}
+.sz-tr{top:-2px;right:-2px;border-width:3px 3px 0 0;}
+.sz-bl{bottom:-2px;left:-2px;border-width:0 0 3px 3px;}
+.sz-br{bottom:-2px;right:-2px;border-width:0 3px 3px 0;}
+.safe-zone.show{display:block;}
+.sz-tk{left:22%;top:0;width:56%;height:100%;}
+.sz-yt{left:5%;top:5%;width:90%;height:90%;}
+
+/* ─── PROJECT HIERARCHY ─── */
+.cat-block{margin-bottom:18px;}
+.cat-hd{display:flex;align-items:center;gap:9px;padding:9px 14px;background:rgba(var(--primary-rgb),.08);border:1px solid rgba(var(--primary-rgb),.2);border-radius:var(--r-md);cursor:pointer;user-select:none;}
+.cat-hd:hover{background:rgba(var(--primary-rgb),.13);}
+.cat-name{font-size:14px;font-weight:700;flex:1;color:var(--text-primary);}
+.cat-toggle{color:var(--text-tertiary);font-size:11px;transition:transform .2s;}
+.cat-toggle.open{transform:rotate(90deg);}
+.cat-body{margin-top:10px;margin-left:10px;display:none;}
+.cat-body.open{display:block;}
+.folder-block{margin-bottom:10px;}
+.folder-hd{display:flex;align-items:center;gap:7px;padding:6px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;user-select:none;}
+.folder-hd:hover{border-color:var(--border-hover);}
+.folder-name{font-size:12.5px;font-weight:600;flex:1;color:var(--text-secondary);}
+.folder-body{margin-top:8px;margin-left:12px;display:none;}
+.folder-body.open{display:block;}
+.folder-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;}
+.proj-nav{display:flex;gap:8px;margin-bottom:18px;align-items:center;flex-wrap:wrap;}
+.proj-nav-btn{padding:5px 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--bg-surface);color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;transition:var(--t);}
+.proj-nav-btn:hover{border-color:var(--border-hover);color:var(--text-primary);}
+.proj-nav-btn.active{background:rgba(var(--primary-rgb),.12);border-color:rgba(var(--primary-rgb),.3);color:var(--primary);}
+
+/* ─── TRASH BIN ─── */
+.trash-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:8px;}
+.trash-meta{flex:1;min-width:0;}
+.trash-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.trash-days{font-size:10.5px;color:var(--accent-red);margin-top:2px;}
+
+/* ─── TRANSCRIPT LINES ─── */
+.tr-line{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:5px;margin-bottom:4px;transition:background .12s;}
+.tr-line:hover{background:rgba(255,255,255,.04);}
+.tr-tc{font-family:'SF Mono',Consolas,monospace;font-size:11px;color:var(--text-tertiary);white-space:nowrap;padding:3px 6px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:4px;cursor:default;user-select:none;line-height:1.6;flex-shrink:0;}
+.tr-txt{flex:1;outline:none;line-height:1.8;border-bottom:1px solid transparent;transition:border-color .12s;}
+.tr-txt:focus{border-bottom-color:rgba(var(--primary-rgb),.4);}
+.tr-box{overflow-y:auto;}
+
+/* ─── TRANSCRIPT TITLE BAR ─── */
+.tr-title-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border);}
+.tr-name-in{flex:1;background:transparent;border:none;outline:none;font-size:14px;font-weight:700;color:var(--text-primary);font-family:inherit;padding:3px 6px;border-radius:4px;border:1px solid transparent;transition:border-color .15s;}
+.tr-name-in:hover{border-color:var(--border);}
+.tr-name-in:focus{border-color:var(--border-focus);background:var(--bg-input);}
+.tc-fmt-sel{padding:3px 7px;font-size:10.5px;font-weight:700;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);font-family:monospace;cursor:pointer;}
+.tc-fmt-badge{font-size:9px;font-weight:800;padding:2px 6px;border-radius:3px;background:rgba(var(--primary-rgb),.15);color:var(--primary);letter-spacing:.4px;white-space:nowrap;}
+
+/* ─── PANEL RESIZER ─── */
+.ed-resizer{width:6px;background:transparent;cursor:col-resize;flex-shrink:0;border-radius:3px;position:relative;transition:background .15s;}
+.ed-resizer:hover,.ed-resizer.active{background:rgba(var(--primary-rgb),.35);}
+.ed-resizer::after{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:2px;height:32px;background:rgba(255,255,255,.15);border-radius:1px;}
+.tr-resizer{height:6px;background:transparent;cursor:row-resize;border-radius:3px;position:relative;transition:background .15s;margin:4px 0;}
+.tr-resizer:hover,.tr-resizer.active{background:rgba(var(--primary-rgb),.35);}
+.tr-resizer::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:2px;width:48px;background:rgba(255,255,255,.15);border-radius:1px;}
+
+/* ─── DRAG-DROP PROJECT ─── */
+.proj-card.dragging{opacity:.35;transform:scale(.97);}
+.folder-body.drag-over{outline:2px dashed rgba(var(--primary-rgb),.5);outline-offset:2px;background:rgba(var(--primary-rgb),.04);border-radius:var(--r-sm);}
+
+/* ─── HEADING COLOUR ─── */
+.ph h2,.c-ttl{color:var(--title,var(--text-primary));}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ═══ SIDEBAR ═══ -->
+<aside class="sidebar">
+    <div class="sb-head">
+        <div class="logo">
+            <div class="logo-ico"><i class="fas fa-closed-captioning"></i></div>
+            <span class="logo-name" id="siteNameDisplay">VoiceFlow</span>
+            <span class="logo-badge">PRO</span>
+        </div>
+    </div>
+    <nav class="nav">
+        <div class="nav-lbl">主要功能</div>
+        <div class="ni active" data-sec="newProject"><i class="fas fa-wand-magic-sparkles"></i> AI 轉錄</div>
+        <div class="ni" data-sec="projects"><i class="fas fa-folder-open"></i> 我的專案</div>
+        <div class="ni" data-sec="subtitleEditor" id="navEditor" style="display:none;"><i class="fas fa-film"></i> 字幕編輯器</div>
+        <div class="nav-lbl">工具</div>
+        <div class="ni" data-sec="library"><i class="fas fa-bookmark"></i> FatHighlight 詞庫</div>
+    </nav>
+    <div class="sb-foot">
+        <div class="user-row" id="userRow" onclick="openLogin()">
+            <div class="avatar" id="userAvatar"><i class="fas fa-user" style="font-size:11px;color:var(--text-tertiary)"></i></div>
+            <div class="user-info">
+                <div class="user-name" id="userName">點擊登入</div>
+                <div class="user-sub" id="userSub">訪客模式</div>
+            </div>
+        </div>
+        <div class="sb-settings" id="settingsBtn"><i class="fas fa-gear"></i> 後台設定</div>
+    </div>
+</aside>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+<div class="inner">
+
+    <!-- AI 轉錄 -->
+    <section class="section active" id="newProject">
+        <div class="ph"><h2>AI 語音轉文字</h2><p>Gemini 雲端引擎或本地 Whisper 離線模型，精準時間戳記與章節分析。</p></div>
+        <div class="card">
+            <div style="display:flex;gap:6px;margin-bottom:12px;">
+                <button type="button" id="modeFileBtn" onclick="setInputMode('file')" class="btn btn-p" style="font-size:12px;padding:5px 12px;"><i class="fas fa-file-audio"></i> 上傳檔案</button>
+                <button type="button" id="modeMicBtn" onclick="setInputMode('mic')" class="btn" style="font-size:12px;padding:5px 12px;"><i class="fas fa-microphone"></i> 麥克風錄音</button>
+            </div>
+            <div class="upload" id="uploadZone">
+                <div class="up-icon"><i class="fas fa-cloud-arrow-up"></i></div>
+                <h3>點擊或拖曳媒體檔案至此</h3>
+                <p>支援 MP3、WAV、MP4、MOV 等格式<br><span class="warn">檔案上限 20MB｜建議將影片音軌轉為 MP3 再上傳</span></p>
+                <input type="file" id="fileInput" accept="audio/*,video/*" style="display:none;">
+            </div>
+            <div class="fbar" id="fileBar" style="display:none;">
+                <i class="fas fa-music"></i>
+                <span class="fn" id="fileNameDisplay"></span>
+                <span class="fs" id="fileSizeDisplay"></span>
+                <button type="button" onclick="clearFile()" title="移除檔案" style="margin-left:8px;padding:3px 8px;border:1px solid rgba(240,96,96,.35);border-radius:5px;background:rgba(240,96,96,.08);color:var(--accent-red);cursor:pointer;font-size:11px;display:inline-flex;align-items:center;gap:4px;font-family:inherit;"><i class="fas fa-times"></i> 移除</button>
+            </div>
+        </div>
+        <!-- 麥克風即時錄音卡 -->
+        <div class="card" id="micRecordCard" style="display:none;">
+            <div class="c-ttl" style="margin-bottom:12px;"><i class="fas fa-microphone" style="color:var(--accent-red);"></i> 麥克風即時錄音</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+                <button class="btn btn-p" id="micStartBtn" type="button" onclick="startMicRecording()" disabled style="gap:7px;">
+                    <i class="fas fa-circle" style="color:#f06060;font-size:10px;"></i> 開始錄音
+                </button>
+                <button class="btn btn-danger" id="micStopBtn" type="button" onclick="stopMicAndTranscribe()" disabled>
+                    <i class="fas fa-stop"></i> 停止並辨識
+                </button>
+                <span id="micStatus" style="font-size:12px;color:var(--text-tertiary);">請先初始化本地模型</span>
+            </div>
+            <div id="micWave" style="height:36px;background:var(--bg-input);border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;overflow:hidden;gap:2px;padding:0 8px;">
+                <span style="font-size:11px;color:var(--text-tertiary);" id="micWaveHint">等待錄音...</span>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="c-ttl" style="margin-bottom:14px;"><i class="fas fa-sliders"></i> 轉錄設定</div>
+            <div class="fg" style="margin-bottom:14px;">
+                <div>
+                    <label class="fl">目標語言</label>
+                    <select class="fs" id="langSelect">
+                        <option value="zh-TW">繁體中文</option>
+                        <option value="zh-CN">簡體中文</option>
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                        <option value="ko">한국어</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                        <option value="de">Deutsch</option>
+                        <option value="it">Italiano</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="fl">每行最大字數</label>
+                    <input type="number" class="fi" id="maxChars" value="20" min="5" max="100">
+                </div>
+                <div>
+                    <label class="fl">AI 引擎</label>
+                    <select class="fs" id="modelSelect" onchange="onModelChange()">
+                        <option value="local">不使用模型（本地 Whisper 離線）</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro（雲端・最精準）</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash（雲端・速度優先）</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 本地模型初始化區塊 -->
+            <div id="localModelSection">
+                <div style="margin-bottom:10px;">
+                    <label class="fl">Whisper 模型版本</label>
+                    <select class="fs" id="whisperModelSelect" onchange="onWhisperModelChange()">
+                        <option value="tiny">Whisper Tiny (~75MB) · 極速，適合測試</option>
+                        <option value="base">Whisper Base (~141MB) · 輕量均衡</option>
+                        <option value="small" selected>Whisper Small (~483MB) · 推薦★ 繁中最精準</option>
+                        <option value="large">Whisper Large-v2 (~2.9GB) · 極致精準度（需 8GB+ 記憶體）</option>
+                    </select>
+                </div>
+                <div class="model-status ms-idle" id="modelStatusBar">
+                    <div class="ms-dot"></div>
+                    <span id="modelStatusTxt">本地模型尚未初始化</span>
+                    <button class="btn" style="margin-left:auto;padding:4px 10px;font-size:11.5px;" id="initModelBtn" onclick="initLocalModel()">
+                        <i class="fas fa-download"></i> 下載並初始化
+                    </button>
+                    <button class="btn btn-danger" style="padding:4px 10px;font-size:11.5px;display:none;" id="disposeModelBtn" onclick="disposeLocalModel()" title="釋放記憶體">
+                        <i class="fas fa-trash-can"></i> 釋放
+                    </button>
+                </div>
+                <div id="modelProgBar" style="display:none;margin-top:7px;">
+                    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;" id="modelProgLabel">下載中...</div>
+                    <div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;">
+                        <div id="modelProgFill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--primary),var(--primary-dark));transition:width .15s;border-radius:3px;"></div>
+                    </div>
+                </div>
+                <p style="font-size:11px;color:var(--text-tertiary);margin-top:7px;">首次使用需聯網下載，之後完全離線運作。自動偵測 WebGPU 硬體加速。</p>
+            </div>
+            <div id="geminiSection" style="display:none;">
+                <div id="apiKeyNotice" style="font-size:11.5px;color:var(--accent-red);padding:8px 12px;background:rgba(240,96,96,.08);border:1px solid rgba(240,96,96,.2);border-radius:var(--r-sm);margin-bottom:6px;display:none;">
+                    ⚠ 尚未設定 Gemini API 金鑰，請至後台設定中填入。
+                </div>
+            </div>
+
+            <div class="opt-strip">
+                <label class="tog"><input type="checkbox" id="enableTimestamps" checked><span class="td"></span>時間戳記</label>
+                <label class="tog"><input type="checkbox" id="enableDiarization"><span class="td"></span>說話者辨識</label>
+                <label class="tog"><input type="checkbox" id="enableChapters" checked><span class="td"></span>ProChapter 章節</label>
+                <label class="tog"><input type="checkbox" id="enableFatHighlight" checked><span class="td"></span>FatHighlight 標記</label>
+            </div>
+            <button class="btn btn-p btn-full" id="startBtn" disabled>
+                <i class="fas fa-sparkles"></i> 開始 AI 轉錄
+            </button>
+        </div>
+    </section>
+
+    <!-- 我的專案 -->
+    <section class="section" id="projects">
+        <div class="ph">
+            <h2>我的專案</h2>
+            <p>依項目 › 資料夾分類管理，可自訂名稱，刪除後移至垃圾桶。</p>
+        </div>
+        <!-- 頂部操作列 -->
+        <div class="proj-nav">
+            <button class="proj-nav-btn active" id="projViewAll" onclick="setProjView('all')"><i class="fas fa-layer-group"></i> 全部專案</button>
+            <button class="proj-nav-btn" id="projViewTrash" onclick="setProjView('trash')"><i class="fas fa-trash-can"></i> 垃圾桶</button>
+            <button class="btn" style="margin-left:auto;padding:5px 12px;font-size:12px;" onclick="addCategory()"><i class="fas fa-plus"></i> 新增項目</button>
+            <select class="fs" id="trashDaysSelect" style="width:auto;font-size:12px;padding:5px 8px;" onchange="saveTrashDays(this.value)">
+                <option value="15">垃圾桶保留 15 天</option>
+                <option value="30" selected>垃圾桶保留 30 天</option>
+            </select>
+        </div>
+        <!-- 主要內容區 -->
+        <div id="projAllView"><div id="projGrid"></div></div>
+        <div id="projTrashView" style="display:none;">
+            <div class="ph" style="margin-bottom:14px;">
+                <h3 style="font-size:14px;font-weight:700;">垃圾桶</h3>
+                <p style="font-size:12px;color:var(--text-secondary);">超過保留天數的專案將自動永久刪除。</p>
+            </div>
+            <div id="trashGrid"></div>
+        </div>
+    </section>
+
+    <!-- 字幕編輯器 -->
+    <section class="section" id="subtitleEditor">
+        <div class="ph"><h2>視覺化字幕編輯器</h2><p>即時預覽字幕樣式，九宮格定位，播放速度控制，尋找取代，匯出 SRT / TXT。</p></div>
+        <div class="stats" id="statsPanel" style="display:none;">
+            <div class="stat"><div class="sv" id="statDuration">—</div><div class="sl">音訊長度</div></div>
+            <div class="stat"><div class="sv" id="statWordCount">—</div><div class="sl">總字數</div></div>
+            <div class="stat"><div class="sv" id="statSegments">—</div><div class="sl">字幕段落</div></div>
+        </div>
+
+        <div class="ed-wrap" id="edWrap">
+            <!-- 左：影片預覽 + 播放控制 -->
+            <div id="edLeft" style="flex:1;min-width:200px;display:flex;flex-direction:column;">
+                <div class="prev-pane" id="previewPane" style="border-radius:var(--r-lg) var(--r-lg) 0 0;flex:1;">
+                    <div id="mediaContainer" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+                        <span style="color:rgba(255,255,255,.15);font-size:12px;">媒體預覽區域</span>
+                    </div>
+                    <!-- 安全區域 -->
+                    <div class="safe-zone sz-tk" id="szTK">
+                        <div class="sz-border"></div>
+                        <div class="sz-label">TikTok / Reels 安全區域</div>
+                        <div class="sz-corner sz-tl"></div><div class="sz-corner sz-tr"></div>
+                        <div class="sz-corner sz-bl"></div><div class="sz-corner sz-br"></div>
+                    </div>
+                    <div class="safe-zone sz-yt" id="szYT">
+                        <div class="sz-border"></div>
+                        <div class="sz-label">YouTube 16:9 安全區域</div>
+                        <div class="sz-corner sz-tl"></div><div class="sz-corner sz-tr"></div>
+                        <div class="sz-corner sz-bl"></div><div class="sz-corner sz-br"></div>
+                    </div>
+                    <div class="sub-ov" id="subOv"></div>
+                </div>
+                <!-- 播放控制列 -->
+                <div class="play-bar">
+                    <button class="play-btn" id="playPauseBtn" onclick="togglePlay()" title="播放/暫停"><i class="fas fa-play" id="playIcon"></i></button>
+                    <button class="play-btn" onclick="skipMedia(-5)" title="倒退5秒"><i class="fas fa-backward-step"></i></button>
+                    <input type="range" class="seek-bar" id="seekBar" value="0" min="0" max="100" step="0.1" oninput="seekTo(this.value)">
+                    <span class="time-disp" id="timeDisplay">00:00 / 00:00</span>
+                    <button class="play-btn" onclick="skipMedia(5)" title="快進5秒"><i class="fas fa-forward-step"></i></button>
+                    <select class="speed-sel" id="speedSelect" onchange="setPlaySpeed(this.value)" title="播放速度">
+                        <option value="0.5">0.5×</option>
+                        <option value="0.75">0.75×</option>
+                        <option value="1" selected>1×</option>
+                        <option value="1.25">1.25×</option>
+                        <option value="1.5">1.5×</option>
+                        <option value="2">2×</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 拖曳調整手柄 -->
+            <div class="ed-resizer" id="edResizer" title="拖曳調整寬度"></div>
+            <!-- 右：字幕樣式控制 -->
+            <div class="ctrl-pane" id="edRight">
+                <div class="c-ttl" style="margin-bottom:13px;"><i class="fas fa-palette"></i> 字幕樣式</div>
+                <div style="margin-bottom:11px;">
+                    <label class="fl">字體</label>
+                    <select class="fs" id="subFont" onchange="applySubStyle()">
+                        <option value="">系統預設</option>
+                        <option value="'Noto Sans TC',sans-serif">Noto Sans TC（黑體）</option>
+                        <option value="'Noto Serif TC',serif">Noto Serif TC（明體）</option>
+                        <option value="'Nunito',sans-serif">Nunito（圓體）</option>
+                        <option value="Impact,sans-serif">Impact（粗體英文）</option>
+                    </select>
+                </div>
+                <div style="margin-bottom:11px;">
+                    <label class="fl">安全區域</label>
+                    <select class="fs" id="safeZoneSelect" onchange="updateSafeZone(this.value)">
+                        <option value="none">關閉</option>
+                        <option value="tiktok">短影音（TikTok / Reels）</option>
+                        <option value="yt">橫式（YouTube 16:9）</option>
+                    </select>
+                </div>
+                <div class="fl" style="text-align:center;margin-bottom:4px;">磁吸定位</div>
+                <div class="gp" id="gridPositioner">
+                    <button class="gb" data-pos="tl"></button><button class="gb" data-pos="tc"></button><button class="gb" data-pos="tr"></button>
+                    <button class="gb" data-pos="ml"></button><button class="gb" data-pos="mc"></button><button class="gb" data-pos="mr"></button>
+                    <button class="gb" data-pos="bl"></button><button class="gb active" data-pos="bc"></button><button class="gb" data-pos="br"></button>
+                </div>
+                <div class="fg" style="margin-bottom:10px;">
+                    <div><label class="fl">字型大小</label><input type="number" class="fi" id="subSize" value="28" oninput="applySubStyle()"></div>
+                    <div><label class="fl">字體顏色</label><input type="color" class="fi" id="subColor" value="#FFFFFF" style="padding:3px;height:38px;" oninput="applySubStyle()"></div>
+                    <div><label class="fl">背景色</label><input type="color" class="fi" id="subBgColor" value="#000000" style="padding:3px;height:38px;" oninput="applySubStyle()"></div>
+                    <div><label class="fl">透明度</label><input type="range" id="subBgAlpha" min="0" max="1" step="0.05" value="0" oninput="applySubStyle()"></div>
+                </div>
+                <label class="tog" style="width:100%;border-radius:6px;">
+                    <input type="checkbox" id="subShadow" checked onchange="applySubStyle()"><span class="td"></span>文字陰影
+                </label>
+            </div>
+        </div>
+
+        <!-- 上下拖曳調整手柄 -->
+        <div class="tr-resizer" id="trResizer" title="拖曳調整高度"></div>
+
+        <!-- 逐字稿區 -->
+        <div class="tr-area" id="trArea">
+            <div class="card tr-card">
+                <!-- 逐字稿標題列 -->
+                <div class="tr-title-bar">
+                    <i class="fas fa-scroll" style="color:var(--primary);font-size:13px;flex-shrink:0;"></i>
+                    <input class="tr-name-in" id="trNameInput" value="未命名專案" placeholder="專案名稱..." oninput="onTrNameChange()">
+                    <span class="tc-fmt-badge" id="tcFmtBadge">8碼</span>
+                    <select class="tc-fmt-sel" id="tcFormatSel" onchange="changeTCFormat(this.value)" title="時間碼格式">
+                        <option value="8">8碼 HH:MM:SS:FF</option>
+                        <option value="9">9碼 HH:MM:SS,mmm</option>
+                    </select>
+                </div>
+                <div class="c-hd" style="margin-bottom:10px;padding-top:0;border-top:none;">
+                    <div style="display:flex;gap:5px;flex-wrap:wrap;">
+                        <button class="btn" onclick="manualOpenCC()" id="openccBtn" title="一鍵轉換為台灣繁體用語" style="display:none;"><i class="fas fa-language"></i> 繁體優化</button>
+                        <button class="btn" onclick="reapplyHighlights()"><i class="fas fa-highlighter"></i> 套用標記</button>
+                        <button class="btn" onclick="exportTXT()"><i class="fas fa-file-lines"></i> TXT</button>
+                        <button class="btn btn-p" onclick="exportSRT()"><i class="fas fa-closed-captioning"></i> SRT</button>
+                    </div>
+                </div>
+                <!-- 尋找 / 取代 -->
+                <div class="find-bar" id="findBar">
+                    <div class="find-row">
+                        <input class="find-in" id="findInput" placeholder="🔍 搜尋文字..." oninput="doFind()">
+                        <button class="btn" style="padding:4px 9px;font-size:11.5px;" onclick="findStep(-1)"><i class="fas fa-chevron-up"></i></button>
+                        <button class="btn" style="padding:4px 9px;font-size:11.5px;" onclick="findStep(1)"><i class="fas fa-chevron-down"></i></button>
+                        <span class="find-count" id="findCount"></span>
+                    </div>
+                    <div class="find-row">
+                        <input class="find-in" id="replaceInput" placeholder="取代為...">
+                        <button class="btn" style="padding:4px 9px;font-size:11.5px;" onclick="doReplaceOne()">取代</button>
+                        <button class="btn" style="padding:4px 9px;font-size:11.5px;" onclick="doReplaceAll()">全部取代</button>
+                    </div>
+                </div>
+                <div class="tr-box" id="transcriptBox" contenteditable="true">
+                    <span style="color:var(--text-tertiary);font-style:italic;">完成 AI 轉錄後，逐字稿將顯示於此...</span>
+                </div>
+            </div>
+            <div class="card ch-card" id="chaptersContainer">
+                <div class="c-hd">
+                    <div class="c-ttl"><i class="fas fa-list-check"></i> 章節</div>
+                    <button class="btn" onclick="copyChapters()" style="padding:4px 9px;font-size:11px;"><i class="fas fa-copy"></i></button>
+                </div>
+                <div class="ch-list" id="chapterList"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FatHighlight 詞庫 -->
+    <section class="section" id="library">
+        <div class="ph"><h2>FatHighlight 詞庫</h2><p>設定關鍵字，AI 轉錄後自動高亮標記，快速提取重點。儲存後會立即套用至當前逐字稿。</p></div>
+        <div class="card">
+            <div class="c-ttl" style="margin-bottom:12px;"><i class="fas fa-plus-circle"></i> 新增關鍵字</div>
+            <textarea id="keywordInput" rows="4" placeholder="用逗號或換行分隔，例如：專案進度, 預算, 特效, 畫面修改..."
+                style="width:100%;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-primary);font-size:13px;font-family:inherit;resize:vertical;outline:none;margin-bottom:12px;line-height:1.6;"></textarea>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button class="btn btn-p" id="saveKwBtn" type="button" onclick="saveKeywords()" style="cursor:pointer;"><i class="fas fa-floppy-disk"></i> 儲存詞庫</button>
+                <button class="btn" id="clearKwBtn" type="button" onclick="clearKeywords()" style="cursor:pointer;"><i class="fas fa-trash"></i> 清除全部</button>
+                <span id="kwSaveHint" style="font-size:11.5px;color:var(--accent-green);display:none;"><i class="fas fa-check"></i> 已儲存並套用</span>
+            </div>
+        </div>
+        <div class="card">
+            <div class="c-hd">
+                <div class="c-ttl"><i class="fas fa-tags"></i> 目前詞庫 <span id="kwCount" style="font-size:11px;font-weight:600;color:var(--text-tertiary);margin-left:4px;"></span></div>
+                <button class="btn" id="reapplyBtn" type="button" onclick="reapplyHighlights()" style="padding:4px 10px;font-size:11.5px;cursor:pointer;" title="重新套用至逐字稿">
+                    <i class="fas fa-rotate"></i> 重新套用
+                </button>
+            </div>
+            <div id="keywordTags" style="display:flex;gap:7px;flex-wrap:wrap;min-height:32px;margin-top:4px;">
+                <span style="color:var(--text-tertiary);font-style:italic;font-size:12px;">尚無關鍵字</span>
+            </div>
+        </div>
+    </section>
+
+</div>
+</main>
+</div>
+
+<!-- ═══ LOADING MODAL ═══ -->
+<div class="overlay" id="loadingModal">
+    <div class="mbox sm load-body">
+        <div class="spin"></div>
+        <div class="load-t">AI 正在處理中</div>
+        <p class="load-s" id="loadingText">正在分析音訊...</p>
+    </div>
+</div>
+
+<!-- ═══ LOGIN MODAL ═══ -->
+<div class="overlay" id="loginModal">
+    <div class="mbox sm">
+        <div class="m-hd">
+            <div class="m-ttl" id="loginTitle"><i class="fas fa-user-circle" style="color:var(--primary);margin-right:7px;"></i>登入 / 註冊</div>
+            <button class="m-close" onclick="closeModal('loginModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div id="loginStep1">
+            <div class="social-btns">
+                <button class="social-btn" onclick="socialLogin('google')">
+                    <div class="sb-ico google-ico"><i class="fab fa-google"></i></div>
+                    使用 Google 帳號繼續
+                </button>
+                <button class="social-btn" onclick="socialLogin('facebook')">
+                    <div class="sb-ico fb-ico"><i class="fab fa-facebook-f"></i></div>
+                    使用 Facebook 帳號繼續
+                </button>
+            </div>
+            <div class="or-divider"><span>或使用 Email</span></div>
+            <div style="margin-bottom:10px;">
+                <label class="fl">Email</label>
+                <input type="email" class="fi" id="loginEmail" placeholder="your@email.com">
+            </div>
+            <div style="margin-bottom:10px;">
+                <label class="fl">顯示名稱（選填）</label>
+                <input type="text" class="fi" id="loginDisplayName" placeholder="留空則自動生成">
+            </div>
+            <div class="err-msg" id="loginErr">請輸入有效的 Email 地址。</div>
+            <button class="btn btn-p btn-full" style="margin-top:14px;" onclick="doEmailLogin()">
+                <i class="fas fa-right-to-bracket"></i> 繼續
+            </button>
+        </div>
+        <div id="loginStep2" style="display:none;">
+            <div style="text-align:center;padding:10px 0;">
+                <div id="loginAvatar" style="width:60px;height:60px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#fff;"></div>
+                <div style="font-size:15px;font-weight:700;" id="loginWelcomeName"></div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;" id="loginWelcomeEmail"></div>
+            </div>
+            <button class="btn btn-p btn-full" style="margin-top:16px;" onclick="confirmLogin()">
+                <i class="fas fa-check"></i> 確認登入
+            </button>
+        </div>
+        <!-- logout panel -->
+        <div id="loginLogout" style="display:none;">
+            <div style="text-align:center;padding:8px 0 16px;">
+                <div id="logoutAvatar" style="width:52px;height:52px;border-radius:50%;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff;"></div>
+                <div style="font-size:14px;font-weight:700;" id="logoutName"></div>
+                <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;" id="logoutEmail"></div>
+            </div>
+            <button class="btn btn-danger btn-full" onclick="doLogout()"><i class="fas fa-right-from-bracket"></i> 登出</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ SETTINGS MODAL ═══ -->
+<div class="overlay" id="settingsModal">
+    <div class="mbox lg">
+        <div class="m-hd">
+            <div class="m-ttl"><i class="fas fa-sliders" style="color:var(--primary);margin-right:7px;"></i>後台設定</div>
+            <button class="m-close" onclick="closeModal('settingsModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('general')">一般</button>
+            <button class="tab-btn" onclick="switchTab('colors')">色彩</button>
+            <button class="tab-btn" onclick="switchTab('advanced')">進階</button>
+        </div>
+        <div class="s-scroll">
+
+            <!-- ── 一般 ── -->
+            <div class="tab-pane active" id="tab-general">
+                <div class="s-sec">
+                    <div class="s-lbl">網站資訊</div>
+                    <div style="margin-bottom:10px;"><label class="fl">網站名稱</label><input type="text" class="fi" id="sName" placeholder="VoiceFlow"></div>
+                    <div><label class="fl">頁面標題</label><input type="text" class="fi" id="sTitle" placeholder="VoiceFlow AI Pro"></div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">更新管理員帳密</div>
+                    <div class="fg" style="margin-bottom:6px;">
+                        <div><label class="fl">新帳號</label><input type="text" class="fi" id="sNewUser" placeholder="留空不更改"></div>
+                        <div><label class="fl">新密碼</label><input type="password" class="fi" id="sNewPass" placeholder="留空不更改"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── 色彩 ── -->
+            <div class="tab-pane" id="tab-colors">
+                <div class="s-sec">
+                    <div class="s-lbl">主色調</div>
+                    <div class="cpw" data-key="color_primary" data-default="#d4a254">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#d4a254">
+                        </div>
+                        <input type="text" class="cpw-hex" value="#d4a254" maxlength="7" placeholder="#d4a254">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#d4a254" onclick="cpwPreset(this,'#d4a254')"></div>
+                            <div class="cpp" style="background:#4a7cf7" onclick="cpwPreset(this,'#4a7cf7')"></div>
+                            <div class="cpp" style="background:#22c97e" onclick="cpwPreset(this,'#22c97e')"></div>
+                            <div class="cpp" style="background:#9b5cf0" onclick="cpwPreset(this,'#9b5cf0')"></div>
+                            <div class="cpp" style="background:#f05c7d" onclick="cpwPreset(this,'#f05c7d')"></div>
+                            <div class="cpp" style="background:#06c4d4" onclick="cpwPreset(this,'#06c4d4')"></div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">頁面背景色</div>
+                    <div class="cpw" data-key="color_bg" data-default="#0b0b0f">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#0b0b0f">
+                        </div>
+                        <input type="text" class="cpw-hex" value="#0b0b0f" maxlength="7">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#0b0b0f" onclick="cpwPreset(this,'#0b0b0f')"></div>
+                            <div class="cpp" style="background:#0d1117" onclick="cpwPreset(this,'#0d1117')"></div>
+                            <div class="cpp" style="background:#0f0e17" onclick="cpwPreset(this,'#0f0e17')"></div>
+                            <div class="cpp" style="background:#111827" onclick="cpwPreset(this,'#111827')"></div>
+                            <div class="cpp" style="background:#1a1a2e" onclick="cpwPreset(this,'#1a1a2e')"></div>
+                            <div class="cpp" style="background:#f8f9fa" onclick="cpwPreset(this,'#f8f9fa')"></div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">側欄 / 導覽背景</div>
+                    <div class="cpw" data-key="color_elevated" data-default="#131318">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#131318">
+                        </div>
+                        <input type="text" class="cpw-hex" value="#131318" maxlength="7">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#131318" onclick="cpwPreset(this,'#131318')"></div>
+                            <div class="cpp" style="background:#161b22" onclick="cpwPreset(this,'#161b22')"></div>
+                            <div class="cpp" style="background:#16161e" onclick="cpwPreset(this,'#16161e')"></div>
+                            <div class="cpp" style="background:#1e2030" onclick="cpwPreset(this,'#1e2030')"></div>
+                            <div class="cpp" style="background:#1f2937" onclick="cpwPreset(this,'#1f2937')"></div>
+                            <div class="cpp" style="background:#f1f3f5" onclick="cpwPreset(this,'#f1f3f5')"></div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">卡片背景</div>
+                    <div class="cpw" data-key="color_card" data-default="#16161e">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#16161e">
+                        </div>
+                        <input type="text" class="cpw-hex" value="#16161e" maxlength="7">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#16161e" onclick="cpwPreset(this,'#16161e')"></div>
+                            <div class="cpp" style="background:#1c1c2e" onclick="cpwPreset(this,'#1c1c2e')"></div>
+                            <div class="cpp" style="background:#1e1e2e" onclick="cpwPreset(this,'#1e1e2e')"></div>
+                            <div class="cpp" style="background:#21262d" onclick="cpwPreset(this,'#21262d')"></div>
+                            <div class="cpp" style="background:#252830" onclick="cpwPreset(this,'#252830')"></div>
+                            <div class="cpp" style="background:#ffffff" onclick="cpwPreset(this,'#ffffff')"></div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">主要文字色</div>
+                    <div class="cpw" data-key="color_text" data-default="#ededf5">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#ededf5">
+                        </div>
+                        <input type="text" class="cpw-hex" value="#ededf5" maxlength="7">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#ededf5" onclick="cpwPreset(this,'#ededf5')"></div>
+                            <div class="cpp" style="background:#f0f0f8" onclick="cpwPreset(this,'#f0f0f8')"></div>
+                            <div class="cpp" style="background:#e2e8f0" onclick="cpwPreset(this,'#e2e8f0')"></div>
+                            <div class="cpp" style="background:#d1d5db" onclick="cpwPreset(this,'#d1d5db')"></div>
+                            <div class="cpp" style="background:#c9d1d9" onclick="cpwPreset(this,'#c9d1d9')"></div>
+                            <div class="cpp" style="background:#111111" onclick="cpwPreset(this,'#111111')"></div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">標題 / 區塊名稱顏色</div>
+                    <div class="cpw" data-key="color_title" data-default="">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#ffffff">
+                        </div>
+                        <input type="text" class="cpw-hex" value="" maxlength="7" placeholder="留空 = 跟隨主色調">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#ffffff" onclick="cpwPreset(this,'#ffffff')"></div>
+                            <div class="cpp" style="background:#d4a254" onclick="cpwPreset(this,'#d4a254')"></div>
+                            <div class="cpp" style="background:#4a7cf7" onclick="cpwPreset(this,'#4a7cf7')"></div>
+                            <div class="cpp" style="background:#22c97e" onclick="cpwPreset(this,'#22c97e')"></div>
+                            <div class="cpp" style="background:#ededf5" onclick="cpwPreset(this,'#ededf5')"></div>
+                            <div class="cpp" style="background:#9b5cf0" onclick="cpwPreset(this,'#9b5cf0')"></div>
+                        </div>
+                    </div>
+                    <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">控制頁面區塊標題（如「逐字稿」、「FatHighlight 詞庫」等）的文字顏色。留空則跟隨主色調。</p>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">次要文字色</div>
+                    <div class="cpw" data-key="color_text2" data-default="#8888a8">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#8888a8">
+                        </div>
+                        <input type="text" class="cpw-hex" value="#8888a8" maxlength="7">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#8888a8" onclick="cpwPreset(this,'#8888a8')"></div>
+                            <div class="cpp" style="background:#9ca3af" onclick="cpwPreset(this,'#9ca3af')"></div>
+                            <div class="cpp" style="background:#6b7280" onclick="cpwPreset(this,'#6b7280')"></div>
+                            <div class="cpp" style="background:#8b949e" onclick="cpwPreset(this,'#8b949e')"></div>
+                            <div class="cpp" style="background:#a0aec0" onclick="cpwPreset(this,'#a0aec0')"></div>
+                            <div class="cpp" style="background:#555555" onclick="cpwPreset(this,'#555555')"></div>
+                        </div>
+                    </div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">輸入框 / 表單背景</div>
+                    <div class="cpw" data-key="color_input" data-default="#0e0e16">
+                        <div class="cpw-wrap">
+                            <div class="cpw-swatch" onclick="this.nextElementSibling.click()"></div>
+                            <input type="color" class="cpw-native" value="#0e0e16">
+                        </div>
+                        <input type="text" class="cpw-hex" value="#0e0e16" maxlength="7">
+                        <div class="cpw-presets">
+                            <div class="cpp" style="background:#0e0e16" onclick="cpwPreset(this,'#0e0e16')"></div>
+                            <div class="cpp" style="background:#0d1117" onclick="cpwPreset(this,'#0d1117')"></div>
+                            <div class="cpp" style="background:#101014" onclick="cpwPreset(this,'#101014')"></div>
+                            <div class="cpp" style="background:#171717" onclick="cpwPreset(this,'#171717')"></div>
+                            <div class="cpp" style="background:#1a1a1a" onclick="cpwPreset(this,'#1a1a1a')"></div>
+                            <div class="cpp" style="background:#f9fafb" onclick="cpwPreset(this,'#f9fafb')"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── 進階 ── -->
+            <div class="tab-pane" id="tab-advanced">
+                <div class="s-sec">
+                    <div class="s-lbl">Gemini API 金鑰</div>
+                    <input type="text" class="fi" id="sApiKey" placeholder="AIzaSy..." style="margin-bottom:5px;">
+                    <p style="font-size:11px;color:var(--text-tertiary);">前往 Google AI Studio 取得 API 金鑰。僅儲存於本機瀏覽器，不會上傳至任何伺服器。</p>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">本地 Whisper 模型大小</div>
+                    <select class="fs" id="sModelSize">
+                        <option value="Xenova/whisper-tiny">Whisper Tiny（約 75MB，速度最快）</option>
+                        <option value="Xenova/whisper-base">Whisper Base（約 145MB，品質較好）</option>
+                        <option value="Xenova/whisper-small">Whisper Small（約 483MB，高品質）</option>
+                    </select>
+                    <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">更換模型後需重新下載。模型支援繁體中文、英文、日文等多語言。</p>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">時間碼規格（預設）</div>
+                    <select class="fs" id="sTCFormat">
+                        <option value="8">8碼 SMPTE HH:MM:SS:FF（後製標準，30fps）</option>
+                        <option value="9">9碼 SRT HH:MM:SS,mmm（毫秒精準，三位數）</option>
+                    </select>
+                    <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">可在逐字稿標題列的下拉選單即時切換，此設定為開啟頁面時的預設值。</p>
+                </div>
+            </div>
+
+        </div><!-- s-scroll -->
+        <div style="display:flex;gap:8px;margin-top:16px;">
+            <button class="btn btn-p btn-full" onclick="saveSettings()">
+                <i class="fas fa-floppy-disk"></i> 儲存設定
+            </button>
+            <button class="btn" style="padding:10px 14px;white-space:nowrap;color:var(--accent-red);border-color:var(--accent-red);" onclick="adminLogout()" title="結束後台登入">
+                <i class="fas fa-right-from-bracket"></i> 登出後台
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- LOGIN GATE for settings -->
+<div class="overlay" id="loginGateModal">
+    <div class="mbox sm">
+        <div class="m-hd">
+            <div class="m-ttl"><i class="fas fa-lock" style="color:var(--primary);margin-right:7px;"></i>後台登入</div>
+            <button class="m-close" onclick="closeModal('loginGateModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <div style="margin-bottom:10px;">
+            <label class="fl">帳號</label>
+            <input type="text" class="fi" id="gateUser" placeholder="帳號" autocomplete="username">
+        </div>
+        <div>
+            <label class="fl">密碼</label>
+            <input type="password" class="fi" id="gatePass" placeholder="密碼" autocomplete="current-password">
+        </div>
+        <div class="err-msg" id="gateErr">帳號或密碼錯誤。</div>
+        <button class="btn btn-p btn-full" style="margin-top:16px;" onclick="doAdminLogin()">
+            <i class="fas fa-right-to-bracket"></i> 登入
+        </button>
+    </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><i class="fas fa-check-circle"></i><span id="toastMsg"></span></div>
+
+<!-- ═══ SCRIPT ═══ -->
+<script>
+// ══════════════════════════════════════════
+// 設定與持久化
+// ══════════════════════════════════════════
+const D = {
+    adminUser:'mark', adminPass:'mark888',
+    siteName:'VoiceFlow', pageTitle:'VoiceFlow AI Pro - 專業語音平台',
+    apiKey:'AIzaSyCPnfPuYktCup7O_c3axDpZkK_dUPnv0tc',
+    color_primary:'#d4a254', color_bg:'#0b0b0f', color_elevated:'#131318',
+    color_card:'#16161e', color_input:'#0e0e16',
+    color_text:'#ededf5', color_text2:'#8888a8',
+    modelSize:'Xenova/whisper-tiny'
+};
+const gs = k => localStorage.getItem('vf_'+k) ?? D[k];
+const ss = (k,v) => localStorage.setItem('vf_'+k, v);
+
+// ── Whisper 模型對照表（僅使用 @xenova/transformers 確認可用的模型）──
+const WHISPER_MODELS = {
+    'tiny':  'Xenova/whisper-tiny',
+    'base':  'Xenova/whisper-base',
+    'small': 'Xenova/whisper-small',
+    'large': 'Xenova/whisper-large-v2'
+};
+
+// ── OpenCC 繁體轉換器 ──
+let twConverter = null;
+try {
+    if (typeof OpenCC !== 'undefined') twConverter = OpenCC.Converter({ from: 'cn', to: 'twp' });
+} catch(e) {}
+
+// ── State ──
+let currentFile=null, audioDuration=0, parsedResult=null, fatKeywords=[];
+let localModelReady=false, localModelLoading=false, transcriber=null;
+let currentWhisperKey=null, pendingUser=null, currentMedia=null;
+// ── 麥克風錄音 State ──
+let micStream=null, micContext=null, micProcessor=null, micChunks=[], micRecording=false;
+// ── 尋找/取代 State ──
+let findMatches=[], findIdx=0;
+// ── 專案 & 時間碼 State ──
+let currentProjectId=null, currentProjectName='未命名專案';
+let tcFormat = localStorage.getItem('vf_tc_format') || '8'; // '8'=SMPTE HH:MM:SS:FF, '9'=SRT HH:MM:SS,mmm
+
+// ══════════════════════════════════════════
+// 初始化
+// ══════════════════════════════════════════
+window.onload = () => {
+    applyColors(); applySiteInfo(); setupNav();
+    setupDrop(); loadKeywords(); setupWYSIWYG();
+    renderProjects(); updateUserUI();
+    onModelChange();
+    setInputMode('file');
+    loadSubtitleStyles(); applySubStyle();
+    const tds = document.getElementById('trashDaysSelect');
+    if (tds) tds.value = getTrashDays();
+
+    document.querySelectorAll('.overlay').forEach(o=>{
+        o.addEventListener('click', e=>{ if(e.target===o && o.id!=='loadingModal') closeModal(o.id); });
+    });
+    document.getElementById('gatePass').addEventListener('keydown', e=>{ if(e.key==='Enter') doAdminLogin(); });
+    document.getElementById('loginEmail').addEventListener('keydown', e=>{ if(e.key==='Enter') doEmailLogin(); });
+    initAllCPW();
+    initResizers();
+    initTranscriptKeyHandler();
+    // 初始化時間碼格式
+    const tcSel = document.getElementById('tcFormatSel');
+    if (tcSel) { tcSel.value = tcFormat; document.getElementById('tcFmtBadge').textContent = tcFormat==='8'?'8碼 SMPTE':'9碼 SRT'; }
+
+    // 頁面關閉/重整時釋放模型記憶體，避免 VRAM/RAM 洩漏
+    window.addEventListener('beforeunload', () => {
+        if (transcriber) { try { transcriber.dispose(); } catch(e) {} }
+        if (micStream) { try { micStream.getTracks().forEach(t=>t.stop()); } catch(e) {} }
+    });
+};
+
+// ══════════════════════════════════════════
+// 色彩系統
+// ══════════════════════════════════════════
+function hex2rgb(h){ const n=parseInt(h.slice(1),16); return `${n>>16},${(n>>8)&255},${n&255}`; }
+function shadeHex(h,p){ const n=parseInt(h.slice(1),16),c=v=>Math.min(255,Math.max(0,v+p)); const r=c(n>>16),g=c((n>>8)&255),b=c(n&255); return '#'+((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1); }
+
+function applyColors() {
+    const vars = {
+        '--primary': gs('color_primary'),
+        '--bg': gs('color_bg'),
+        '--bg-elevated': gs('color_elevated'),
+        '--bg-card': gs('color_card'),
+        '--bg-input': gs('color_input'),
+        '--text-primary': gs('color_text'),
+        '--text-secondary': gs('color_text2'),
+    };
+    const p = vars['--primary'];
+    vars['--primary-dark'] = shadeHex(p,-22);
+    vars['--primary-rgb'] = hex2rgb(p);
+    vars['--border-focus'] = `rgba(${hex2rgb(p)},0.5)`;
+    // 標題顏色：若有設定則用自訂色，否則跟隨主色調
+    const titleColor = gs('color_title');
+    vars['--title'] = titleColor && titleColor !== '' ? titleColor : vars['--primary'];
+    for(const [k,v] of Object.entries(vars)) document.documentElement.style.setProperty(k,v);
+}
+
+function applySiteInfo() {
+    document.getElementById('siteNameDisplay').textContent = gs('siteName');
+    document.title = gs('pageTitle');
+}
+
+// ── CPW (Color Picker Widget) ──
+function initAllCPW() {
+    document.querySelectorAll('.cpw').forEach(cpw => {
+        const key = cpw.dataset.key;
+        const saved = gs(key);
+        syncCPW(cpw, saved);
+        const native = cpw.querySelector('.cpw-native');
+        const hex = cpw.querySelector('.cpw-hex');
+        native.addEventListener('input', ()=> syncCPW(cpw, native.value));
+        hex.addEventListener('input', ()=>{ if(/^#[0-9a-fA-F]{6}$/.test(hex.value)) syncCPW(cpw,hex.value); });
+        hex.addEventListener('blur', ()=>{ if(!/^#[0-9a-fA-F]{6}$/.test(hex.value)) hex.value=native.value; });
+    });
+}
+
+function syncCPW(cpw, hex) {
+    if(!hex || !/^#[0-9a-fA-F]{6}$/i.test(hex)) return;
+    cpw.querySelector('.cpw-swatch').style.background = hex;
+    cpw.querySelector('.cpw-native').value = hex;
+    cpw.querySelector('.cpw-hex').value = hex;
+}
+
+function cpwPreset(el, hex) {
+    const cpw = el.closest('.cpw');
+    syncCPW(cpw, hex);
+}
+
+// ══════════════════════════════════════════
+// 導覽
+// ══════════════════════════════════════════
+function setupNav() {
+    document.querySelectorAll('.ni').forEach(item=>{
+        item.onclick = ()=>{
+            document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
+            document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+            item.classList.add('active');
+            document.getElementById(item.dataset.sec).classList.add('active');
+            if(item.dataset.sec==='projects') renderProjects();
+        };
+    });
+}
+
+function goSection(id) {
+    document.querySelectorAll('.ni').forEach(n=>n.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    const ni = document.querySelector(`.ni[data-sec="${id}"]`);
+    if(ni) ni.classList.add('active');
+}
+
+// ══════════════════════════════════════════
+// AI 引擎切換
+// ══════════════════════════════════════════
+function onModelChange() {
+    const m = document.getElementById('modelSelect').value;
+    const isLocal = m === 'local';
+    document.getElementById('localModelSection').style.display = isLocal ? 'block' : 'none';
+    document.getElementById('geminiSection').style.display = isLocal ? 'none' : 'block';
+    const apiKeyNotice = document.getElementById('apiKeyNotice');
+    if(!isLocal && (!gs('apiKey') || gs('apiKey').length < 10)) {
+        apiKeyNotice.style.display = 'block';
+    } else {
+        apiKeyNotice.style.display = 'none';
+    }
+    // 本地模式禁用不支援的選項
+    document.getElementById('enableDiarization').disabled = isLocal;
+    document.getElementById('enableChapters').disabled = isLocal;
+    // 更新開始按鈕狀態
+    updateStartBtn();
+}
+
+function updateStartBtn() {
+    const m = document.getElementById('modelSelect').value;
+    const isLocal = m === 'local';
+    const isMicMode = document.getElementById('modeMicBtn')?.classList.contains('btn-p');
+    if (isMicMode) {
+        // 麥克風模式：主開始按鈕隱藏，由 micStartBtn 控制
+        document.getElementById('startBtn').disabled = true;
+        return;
+    }
+    const hasFile = !!currentFile;
+    const modelOk = !isLocal || localModelReady;
+    document.getElementById('startBtn').disabled = !hasFile || !modelOk;
+}
+
+// ══════════════════════════════════════════
+// 輸入模式切換（檔案 / 麥克風）
+// ══════════════════════════════════════════
+function setInputMode(mode) {
+    const isFile = mode === 'file';
+    document.getElementById('uploadZone').style.display = isFile ? '' : 'none';
+    document.getElementById('fileBar').style.display = 'none';
+    document.getElementById('micRecordCard').style.display = isFile ? 'none' : '';
+    document.getElementById('modeFileBtn').className = isFile ? 'btn btn-p' : 'btn';
+    document.getElementById('modeMicBtn').className = isFile ? 'btn' : 'btn btn-p';
+    if (!isFile) currentFile = null;
+    updateStartBtn();
+}
+
+// ══════════════════════════════════════════
+// 本地 Whisper 模型
+// ══════════════════════════════════════════
+async function detectDevice() {
+    if ('gpu' in navigator) {
+        try { const a = await navigator.gpu.requestAdapter(); if (a) return 'webgpu'; } catch(e) {}
+    }
+    return 'wasm';
+}
+
+function onWhisperModelChange() {
+    const key = document.getElementById('whisperModelSelect').value;
+    if (key !== currentWhisperKey) {
+        // 切換模型時自動釋放舊模型記憶體
+        if (transcriber) {
+            try { transcriber.dispose(); } catch(e) {}
+            transcriber = null;
+        }
+        localModelReady = false;
+        currentWhisperKey = null;
+        setModelStatus('ms-idle', '模型已切換，請重新下載並初始化', false);
+        updateStartBtn();
+        const micStartBtn = document.getElementById('micStartBtn');
+        if (micStartBtn) micStartBtn.disabled = true;
+        const micStatus = document.getElementById('micStatus');
+        if (micStatus) micStatus.textContent = '請先初始化本地模型';
+    }
+}
+
+async function disposeLocalModel() {
+    if (!transcriber) return;
+    try {
+        setModelStatus('ms-loading', '正在釋放模型記憶體...', false);
+        await transcriber.dispose();
+    } catch(e) {}
+    transcriber = null;
+    localModelReady = false;
+    currentWhisperKey = null;
+    localModelLoading = false;
+    setModelStatus('ms-idle', '記憶體已釋放，可重新下載模型', false);
+    updateStartBtn();
+    document.getElementById('disposeModelBtn').style.display = 'none';
+    const micStartBtn = document.getElementById('micStartBtn');
+    if (micStartBtn) micStartBtn.disabled = true;
+    toast('模型記憶體已釋放', 'ok');
+}
+
+function setModelStatus(cls, txt, showProg=false) {
+    const bar = document.getElementById('modelStatusBar');
+    bar.className = `model-status ${cls}`;
+    document.getElementById('modelStatusTxt').textContent = txt;
+    document.getElementById('modelProgBar').style.display = showProg ? 'block' : 'none';
+    document.getElementById('initModelBtn').style.display = (cls==='ms-ready'||cls==='ms-loading') ? 'none' : 'inline-flex';
+    const db = document.getElementById('disposeModelBtn');
+    if (db) db.style.display = cls==='ms-ready' ? 'inline-flex' : 'none';
+}
+
+async function initLocalModel() {
+    if (localModelLoading) return;
+    // 若已有舊模型，先釋放
+    if (transcriber) { try { await transcriber.dispose(); } catch(e) {} transcriber = null; }
+    localModelLoading = true;
+    const key = document.getElementById('whisperModelSelect')?.value || 'small';
+    const modelId = WHISPER_MODELS[key] || 'Xenova/whisper-small';
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('disposeModelBtn').style.display = 'none';
+
+    const mkProgress = (devLabel) => (prog) => {
+        const pct = Math.round(prog.progress || 0);
+        if (prog.status === 'downloading' || prog.status === 'progress') {
+            const fname = prog.file?.split('/').pop() || '';
+            document.getElementById('modelProgFill').style.width = pct + '%';
+            document.getElementById('modelProgLabel').textContent = `[${devLabel}] 下載中：${pct}%　${fname}`;
+        }
+        if (prog.status === 'done') {
+            document.getElementById('modelProgLabel').textContent = `[${devLabel}] 正在初始化模型，請稍候...`;
+        }
+    };
+
+    const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+
+    // 先嘗試 WebGPU，失敗自動降級 WASM
+    let device = await detectDevice();
+    let devLabel = device === 'webgpu' ? 'WebGPU' : 'WASM';
+    setModelStatus('ms-loading', `[${devLabel}] 正在連線下載 ${modelId.split('/')[1]}...`, true);
+
+    try {
+        transcriber = await pipeline('automatic-speech-recognition', modelId, {
+            device, progress_callback: mkProgress(devLabel)
+        });
+    } catch(err) {
+        if (device === 'webgpu') {
+            // WebGPU 失敗 → 降級至 WASM
+            device = 'wasm'; devLabel = 'WASM';
+            setModelStatus('ms-loading', `[WASM] WebGPU 不支援此模型，切換至 CPU 模式下載...`, true);
+            try {
+                transcriber = await pipeline('automatic-speech-recognition', modelId, {
+                    device: 'wasm', progress_callback: mkProgress('WASM')
+                });
+            } catch(err2) {
+                localModelLoading = false;
+                setModelStatus('ms-error', '載入失敗：' + err2.message.slice(0, 70), false);
+                toast('模型載入失敗：' + err2.message.slice(0, 50), 'err');
+                return;
+            }
+        } else {
+            localModelLoading = false;
+            setModelStatus('ms-error', '載入失敗：' + err.message.slice(0, 70), false);
+            toast('模型載入失敗：' + err.message.slice(0, 50), 'err');
+            return;
+        }
+    }
+
+    localModelReady = true;
+    localModelLoading = false;
+    currentWhisperKey = key;
+    setModelStatus('ms-ready', `[${devLabel}] ${modelId.split('/')[1]} 已就緒，可離線使用`, false);
+    document.getElementById('disposeModelBtn').style.display = 'inline-flex';
+    updateStartBtn();
+    const micStartBtn = document.getElementById('micStartBtn');
+    if (micStartBtn) micStartBtn.disabled = false;
+    const micStatus = document.getElementById('micStatus');
+    if (micStatus) micStatus.textContent = '模型就緒，可開始錄音';
+    toast('本地 Whisper 模型已就緒！', 'ok');
+}
+
+// ══════════════════════════════════════════
+// 麥克風即時錄音
+// ══════════════════════════════════════════
+async function startMicRecording() {
+    if (!transcriber) { toast('請先初始化本地模型', 'err'); return; }
+    micChunks = [];
+    micRecording = true;
+    try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // 強制 16kHz，直接符合 Whisper 要求，無需重新取樣
+        micContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const src = micContext.createMediaStreamSource(micStream);
+        micProcessor = micContext.createScriptProcessor(4096, 1, 1);
+        micProcessor.onaudioprocess = (e) => {
+            if (micRecording) micChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+        };
+        src.connect(micProcessor);
+        micProcessor.connect(micContext.destination);
+
+        document.getElementById('micStartBtn').disabled = true;
+        document.getElementById('micStopBtn').disabled = false;
+        document.getElementById('micStatus').textContent = '🔴 錄音中... 請對麥克風說話';
+        document.getElementById('micStatus').style.color = 'var(--accent-red)';
+        document.getElementById('micWaveHint').textContent = '錄音中...';
+        // 動態波形動畫
+        startMicWave();
+    } catch(err) {
+        micRecording = false;
+        toast('無法存取麥克風：' + err.message, 'err');
+    }
+}
+
+let micWaveTimer = null;
+function startMicWave() {
+    const wave = document.getElementById('micWave');
+    wave.innerHTML = '';
+    const bars = 24;
+    for (let i = 0; i < bars; i++) {
+        const b = document.createElement('div');
+        b.style.cssText = `width:5px;border-radius:3px;background:var(--primary);transition:height .12s;height:4px;`;
+        wave.appendChild(b);
+    }
+    micWaveTimer = setInterval(() => {
+        wave.querySelectorAll('div').forEach(b => {
+            const h = micRecording ? (4 + Math.random() * 28) : 4;
+            b.style.height = h + 'px';
+        });
+    }, 120);
+}
+
+function stopMicWave() {
+    clearInterval(micWaveTimer);
+    const wave = document.getElementById('micWave');
+    wave.querySelectorAll('div').forEach(b => b.style.height = '4px');
+    setTimeout(() => {
+        wave.innerHTML = '<span style="font-size:11px;color:var(--text-tertiary);" id="micWaveHint">等待錄音...</span>';
+    }, 300);
+}
+
+async function stopMicAndTranscribe() {
+    if (!micRecording) return;
+    micRecording = false;
+    stopMicWave();
+
+    document.getElementById('micStartBtn').disabled = false;
+    document.getElementById('micStopBtn').disabled = true;
+    document.getElementById('micStatus').textContent = '正在辨識...';
+    document.getElementById('micStatus').style.color = 'var(--text-secondary)';
+
+    micProcessor?.disconnect();
+    try { micContext?.close(); } catch(e) {}
+    micStream?.getTracks().forEach(t => t.stop());
+
+    // 合併所有音訊片段
+    const total = micChunks.reduce((a, c) => a + c.length, 0);
+    if (total === 0) { toast('未錄到任何聲音', 'err'); return; }
+    const merged = new Float32Array(total);
+    let off = 0;
+    for (const c of micChunks) { merged.set(c, off); off += c.length; }
+    micChunks = [];
+
+    const modal = document.getElementById('loadingModal');
+    const lt = document.getElementById('loadingText');
+    modal.classList.add('show');
+    lt.textContent = '本地 AI 辨識麥克風錄音中...';
+
+    const langCode = document.getElementById('langSelect').value;
+    const maxCh = document.getElementById('maxChars').value;
+    const whisperLang = WHISPER_LANG[langCode] || 'zh';
+    const t0 = performance.now();
+
+    try {
+        const result = await transcriber(merged, {
+            chunk_length_s: 28,
+            stride_length_s: 4,
+            language: whisperLang,
+            task: 'transcribe',
+            return_timestamps: true,
+        });
+        const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+        parsedResult = sanitizeResult(whisperToResult(result, maxCh), langCode);
+        audioDuration = total / 16000;
+        currentFile = { name: `麥克風錄音_${new Date().toLocaleTimeString('zh-TW')}`, size: 0 };
+        lt.textContent = `辨識完成，耗時 ${elapsed} 秒`;
+        document.getElementById('micStatus').textContent = `✅ 辨識完成（${elapsed}s）`;
+        finishTranscription();
+    } catch(err) {
+        modal.classList.remove('show');
+        toast('辨識失敗：' + err.message, 'err');
+        document.getElementById('micStatus').textContent = '❌ 辨識失敗';
+    }
+}
+
+// 音訊預處理：解碼並重新取樣至 16kHz Mono Float32Array
+async function prepAudio(file) {
+    const buf = await file.arrayBuffer();
+    const tmpCtx = new AudioContext();
+    const decoded = await tmpCtx.decodeAudioData(buf);
+    await tmpCtx.close();
+    const targetSR = 16000;
+    const offCtx = new OfflineAudioContext(1, Math.ceil(decoded.duration * targetSR), targetSR);
+    const src = offCtx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(offCtx.destination);
+    src.start(0);
+    const resampled = await offCtx.startRendering();
+    return resampled.getChannelData(0);
+}
+
+// WAV 編碼器（PCM 16-bit mono）
+function encodeWAV(samples, sampleRate) {
+    const buf = new ArrayBuffer(44 + samples.length * 2);
+    const v = new DataView(buf);
+    const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    ws(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true);
+    ws(8, 'WAVE'); ws(12, 'fmt '); v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sampleRate, true); v.setUint32(28, sampleRate * 2, true);
+    v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    ws(36, 'data'); v.setUint32(40, samples.length * 2, true);
+    for (let i = 0; i < samples.length; i++)
+        v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, samples[i] * 32768)), true);
+    return buf;
+}
+
+// 為 Gemini 預處理音訊：重新取樣至 16kHz mono WAV，大幅縮小 payload
+async function prepAudioForGemini(file) {
+    const arrayBuf = await file.arrayBuffer();
+    const tmpCtx = new AudioContext();
+    const decoded = await tmpCtx.decodeAudioData(arrayBuf);
+    await tmpCtx.close();
+    const targetSR = 16000;
+    const offCtx = new OfflineAudioContext(1, Math.ceil(decoded.duration * targetSR), targetSR);
+    const src = offCtx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(offCtx.destination);
+    src.start(0);
+    const resampled = await offCtx.startRendering();
+    const f32 = resampled.getChannelData(0);
+    const wavBuf = encodeWAV(f32, targetSR);
+    const bytes = new Uint8Array(wavBuf);
+    let bin = '';
+    const chunk = 8192;
+    for (let i = 0; i < bytes.length; i += chunk)
+        bin += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    return { b64: btoa(bin), mimeType: 'audio/wav' };
+}
+
+// 將 whisper 輸出轉為通用格式
+function whisperToResult(out, maxCh) {
+    const maxC = parseInt(maxCh)||20;
+    if(!out.chunks?.length) {
+        return { transcript:[{ start:'', end:'', speaker:'', text:(out.text||'').trim() }], chapters:[] };
+    }
+    const lines=[];
+    let cur='', cStart=out.chunks[0]?.timestamp[0]??0, cEnd=0;
+    for(const chunk of out.chunks){
+        const t=(chunk.text||'').trim();
+        if(!t) continue;
+        const ts=chunk.timestamp||[cEnd,cEnd];
+        if(cur && (cur+t).replace(/\s/g,'').length > maxC){
+            lines.push({ start:s2srt(cStart), end:s2srt(cEnd), speaker:'', text:cur.trim() });
+            cur=t; cStart=ts[0]??cEnd;
+        } else { cur+=t; }
+        cEnd=ts[1]??ts[0]??cEnd;
+    }
+    if(cur.trim()) lines.push({ start:s2srt(cStart), end:s2srt(cEnd), speaker:'', text:cur.trim() });
+    return { transcript:lines, chapters:[] };
+}
+
+function s2srt(s) {
+    if(s==null||isNaN(s)) return '00:00:00,000';
+    const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60), ms=Math.round((s%1)*1000);
+    return `${p2(h)}:${p2(m)}:${p2(sec)},${String(ms).padStart(3,'0')}`;
+}
+function p2(n){ return String(n).padStart(2,'0'); }
+
+// ══════════════════════════════════════════
+// 檔案上傳
+// ══════════════════════════════════════════
+function setupDrop() {
+    const z=document.getElementById('uploadZone'), inp=document.getElementById('fileInput');
+    z.onclick=()=>inp.click();
+    z.ondragover=e=>{e.preventDefault();z.classList.add('drag');};
+    z.ondragleave=()=>z.classList.remove('drag');
+    z.ondrop=e=>{e.preventDefault();z.classList.remove('drag');if(e.dataTransfer.files[0]) pickFile(e.dataTransfer.files[0]);};
+    inp.onchange=e=>{if(e.target.files[0]) pickFile(e.target.files[0]);};
+    document.getElementById('startBtn').onclick=startTranscription;
+}
+
+function pickFile(file) {
+    if(file.size > 20*1024*1024){
+        toast(`檔案過大（${(file.size/1024/1024).toFixed(1)}MB），上限 20MB`, 'err');
+        document.getElementById('fileInput').value='';
+        document.getElementById('fileBar').style.display='none';
+        currentFile=null; updateStartBtn(); return;
+    }
+    currentFile=file;
+    document.getElementById('fileNameDisplay').textContent=file.name;
+    document.getElementById('fileSizeDisplay').textContent=(file.size/1024/1024).toFixed(2)+' MB';
+    document.getElementById('fileBar').style.display='flex';
+    updateStartBtn();
+
+    const url=URL.createObjectURL(file);
+    const mc=document.getElementById('mediaContainer');
+    mc.innerHTML='';
+    let el;
+    if(file.type.startsWith('video/')){ el=document.createElement('video'); el.controls=true; }
+    else{ el=document.createElement('audio'); el.controls=true; el.style.cssText='width:88%;margin:auto;'; }
+    el.src=url;
+    el.onloadedmetadata=()=>{ audioDuration=el.duration; initSeekBar(el); };
+    el.ontimeupdate=()=>{ updateLiveSub(el.currentTime); updateSeekBar(el); };
+    el.onended=()=>{ const pi=document.getElementById('playIcon'); if(pi) pi.className='fas fa-play'; };
+    currentMedia=el;
+    mc.appendChild(el);
+}
+
+function clearFile() {
+    currentFile = null;
+    audioDuration = 0;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileBar').style.display = 'none';
+    document.getElementById('mediaContainer').innerHTML = '';
+    updateStartBtn();
+}
+
+function toB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.readAsDataURL(file); r.onload=()=>res(r.result.split(',')[1]); r.onerror=rej; }); }
+
+// ══════════════════════════════════════════
+// 轉錄主流程
+// ══════════════════════════════════════════
+async function startTranscription() {
+    if(!currentFile) return;
+    const model = document.getElementById('modelSelect').value;
+    const modal = document.getElementById('loadingModal');
+    const lt = document.getElementById('loadingText');
+    modal.classList.add('show');
+    document.getElementById('startBtn').disabled=true;
+
+    try {
+        if(model === 'local'){
+            await runLocalTranscription(lt);
+        } else {
+            await runGeminiTranscription(model, lt);
+        }
+        finishTranscription();
+    } catch(err) {
+        console.error(err);
+        modal.classList.remove('show');
+        updateStartBtn();
+        lt.textContent='正在分析音訊...';
+        toast('轉錄失敗：'+err.message.slice(0,60), 'err');
+        setTimeout(()=>alert('❌ 轉錄失敗\n\n'+err.message), 100);
+    }
+}
+
+// Whisper 語言代碼對應
+const WHISPER_LANG = {'zh-TW':'zh','zh-CN':'zh','en':'en','ja':'ja','ko':'ko','es':'es','fr':'fr','de':'de','it':'it'};
+const LANG_DISPLAY = {'zh-TW':'繁體中文','zh-CN':'簡體中文','en':'English','ja':'日本語','ko':'한국어','es':'Español','fr':'Français','de':'Deutsch','it':'Italiano'};
+
+async function runLocalTranscription(lt) {
+    if (!transcriber) throw new Error('請先初始化本地模型。');
+    lt.textContent = '正在解碼音訊並重新取樣至 16kHz...';
+    const audioData = await prepAudio(currentFile);
+    const langCode = document.getElementById('langSelect').value;
+    const maxCh = document.getElementById('maxChars').value;
+    const whisperLang = WHISPER_LANG[langCode] || 'zh';
+    lt.textContent = `Whisper 本地辨識中（語言：${LANG_DISPLAY[langCode]}，依音訊長度可能需數分鐘）...`;
+    const opts = { chunk_length_s: 28, stride_length_s: 4, language: whisperLang, task: 'transcribe', return_timestamps: true };
+    let result;
+    try {
+        result = await transcriber(audioData, opts);
+    } catch(err) {
+        // OrtRun 錯誤通常是 WebGPU 推理失敗 → 降級至 WASM 重試
+        const isOrtErr = err.message && (err.message.includes('OrtRun') || err.message.includes('error code'));
+        if (isOrtErr) {
+            lt.textContent = 'WebGPU 推理失敗，切換至 CPU(WASM) 模式重試...';
+            const key = document.getElementById('whisperModelSelect')?.value || 'small';
+            const modelId = WHISPER_MODELS[key] || 'Xenova/whisper-small';
+            try { await transcriber.dispose(); } catch(e) {}
+            const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+            env.allowLocalModels = false; env.useBrowserCache = true;
+            transcriber = await pipeline('automatic-speech-recognition', modelId, { device: 'wasm' });
+            setModelStatus('ms-ready', `[WASM] ${modelId.split('/')[1]} 已切換至 CPU 模式`, false);
+            result = await transcriber(audioData, opts);
+        } else {
+            throw err;
+        }
+    }
+    parsedResult = sanitizeResult(whisperToResult(result, maxCh), langCode);
+}
+
+async function runGeminiTranscription(model, lt) {
+    const apiKey = gs('apiKey');
+    if(!apiKey||apiKey.length<10) throw new Error('請先在後台設定中填入 Gemini API 金鑰。');
+    lt.textContent = '正在重新取樣並壓縮音訊至 16kHz...';
+    const { b64, mimeType: audioMime } = await prepAudioForGemini(currentFile).catch(async () => {
+        // fallback: 直接 base64 原始檔
+        const raw = await toB64(currentFile);
+        return { b64: raw, mimeType: currentFile.type || 'audio/mpeg' };
+    });
+    const langCode = document.getElementById('langSelect').value;
+    const maxCh = document.getElementById('maxChars').value;
+    const wantTime = document.getElementById('enableTimestamps').checked;
+    const wantDiar = document.getElementById('enableDiarization').checked;
+    const wantChap = document.getElementById('enableChapters').checked;
+    const modelLabel = model.includes('pro') ? 'Gemini 2.5 Pro' : 'Gemini 2.5 Flash';
+    const langName = LANG_DISPLAY[langCode] || langCode;
+    const isTW = langCode === 'zh-TW';
+
+    const twRule = isTW ? `
+【繁體中文強制規則】
+- 每一個漢字必須使用台灣正體字（繁體）。
+- 以下簡體字絕對禁止出現：为/这/来/时/说/国/会/个/们/么/问/过/还/给/从/里/电/话/学/语/计/机/网/视/频/经/记/设/备/报/场/间/样/词/关/组/级/来/带/当/对/发/开/体/书/长/声/师/数/树/听/头/图/团/无/写/选/业/议/应/远/运/员/战/证/质/终/众/专/准/兰/约/软/红/蓝/绿/灯/错/档/积/监/将/奖/劳/乱/满/梦/脑/评/气/热/试/税/习/异/预/鸡/历/厂/齿/虫/聪/达/胆/弹/导/夺/该/规/柜/坏/几/继/竞/龙/买/卖/迁/亲/认/随/铁/员/张/着/着/专/规/观/产/历/进/见/经/两/说/时/问/为/现/些/样/这/种/知/里
+- 請特別注意：蘭不是兰、會不是会、來不是来、時不是时、為不是为、這不是这、說不是说、國不是国、個不是个。` : '';
+
+    const prompt = `你是頂尖的專業語音辨識與字幕製作 AI，任務是精確還原音訊中的口語內容。
+${twRule}
+【核心規則 — 違反即失敗】
+1. 目標語言：${langName}。${isTW ? '所有輸出漢字必須為繁體正體字（台灣用法）。' : ''}
+2. 斷句：每行最多 ${maxCh} 字，依語意與停頓自然斷句，不可截斷詞彙。
+3. 【禁止重複】嚴格禁止重複相同句子或詞語。若同一段話已出現，下一段必須是新內容。
+4. 【禁止幻覺】只輸出音訊中真實發出的聲音所對應的文字。雜音/不清楚請標記 [不清楚] 而非捏造。
+5. 時間戳記：${wantTime ? '每段精準的開始與結束時間，格式 HH:MM:SS,mmm（例 00:00:05,240）' : '不需要，start/end 填空字串'}。
+6. 說話者：${wantDiar ? '依聲音特徵標示 Speaker A/B 等' : '不需要，speaker 填空字串'}。
+7. 章節：${wantChap ? '分析出有意義的章節，格式 {"time":"00:00","title":"章節名"}' : '不需要，chapters 回傳 []'}。
+8. 【JSON格式】只能輸出合法 JSON，禁止任何 markdown、說明或多餘文字。
+
+輸出格式：{"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"大家好，歡迎來到今天的節目。"}],"chapters":[]}`;
+
+    const payload = {
+        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: audioMime, data: b64 } }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 65536 }
+    };
+
+    lt.textContent = `${modelLabel} 串流辨識中，請稍候...`;
+
+    // 使用串流 API 加快回應速度
+    const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+    );
+
+    if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        const c = errBody?.error?.code;
+        if (c === 429) throw new Error('API 呼叫達上限（Rate Limit）。請稍後再試或升級使用額度。');
+        if (c === 403) throw new Error('API 金鑰無效或無存取權限。請至後台設定確認 API 金鑰。');
+        throw new Error(errBody?.error?.message || `HTTP ${resp.status}`);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', rawText = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (!data || data === '[DONE]') continue;
+            try {
+                const chunk = JSON.parse(data);
+                if (chunk.error) {
+                    const c = chunk.error.code;
+                    if (c === 429) throw new Error('API 呼叫達上限，請稍後再試。');
+                    throw new Error(chunk.error.message);
+                }
+                const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                rawText += part;
+                if (rawText.length > 0) lt.textContent = `${modelLabel} 辨識中，已接收 ${rawText.length} 字元...`;
+            } catch (e) {
+                if (e.message && !e.message.includes('JSON')) throw e;
+            }
+        }
+    }
+
+    if (!rawText) throw new Error('AI 未能返回有效結果，請確認音訊品質或嘗試 Flash 模型。');
+    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+    // 找到第一個 { 開始解析
+    const jsonStart = rawText.indexOf('{');
+    if (jsonStart === -1) throw new Error('AI 回傳格式錯誤，請重試。');
+    rawText = rawText.slice(jsonStart);
+    parsedResult = sanitizeResult(JSON.parse(rawText), langCode);
+}
+
+// 繁簡轉換對照表（簡→繁，針對語音辨識最常混入的簡體字）
+const S2T_MAP = {
+  '爱':'愛','边':'邊','变':'變','别':'別','补':'補','长':'長','车':'車','处':'處',
+  '传':'傳','创':'創','带':'帶','当':'當','点':'點','动':'動','断':'斷','对':'對',
+  '发':'發','风':'風','妇':'婦','干':'幹','该':'該','给':'給','归':'歸','国':'國',
+  '过':'過','汉':'漢','号':'號','华':'華','环':'環','换':'換','会':'會','获':'獲',
+  '几':'幾','继':'繼','计':'計','见':'見','进':'進','举':'舉','据':'據','开':'開',
+  '来':'來','劳':'勞','乐':'樂','联':'聯','两':'兩','临':'臨','领':'領','龙':'龍',
+  '乱':'亂','买':'買','卖':'賣','满':'滿','万':'萬','贸':'貿','么':'麼','们':'們',
+  '梦':'夢','难':'難','脑':'腦','农':'農','盘':'盤','亲':'親','区':'區','权':'權',
+  '热':'熱','认':'認','伤':'傷','声':'聲','师':'師','时':'時','实':'實','书':'書',
+  '数':'數','树':'樹','双':'雙','随':'隨','台':'臺','题':'題','铁':'鐵','听':'聽',
+  '头':'頭','图':'圖','团':'團','为':'為','卫':'衛','无':'無','习':'習','显':'顯',
+  '现':'現','线':'線','响':'響','写':'寫','选':'選','严':'嚴','业':'業','议':'議',
+  '应':'應','远':'遠','运':'運','员':'員','战':'戰','张':'張','证':'證','质':'質',
+  '终':'終','众':'眾','专':'專','这':'這','说':'說','语':'語','话':'話','电':'電',
+  '网':'網','机':'機','码':'碼','视':'視','频':'頻','经':'經','还':'還','从':'從',
+  '个':'個','里':'裡','记':'記','设':'設','备':'備','类':'類','报':'報','务':'務',
+  '场':'場','间':'間','样':'樣','词':'詞','关':'關','问':'問','组':'組','级':'級',
+  '并':'並','标':'標','广':'廣','学':'學','后':'後','飞':'飛','费':'費','画':'畫',
+  '欢':'歡','监':'監','将':'將','奖':'獎','购':'購','观':'觀','规':'規','积':'積',
+  '评':'評','气':'氣','试':'試','税':'稅','异':'異','预':'預','妈':'媽','着':'著',
+  '兴':'興','乡':'鄉','细':'細','虽':'雖','丰':'豐','复':'復','盖':'蓋','赶':'趕',
+  '竞':'競','价':'價','建':'建','据':'據','迁':'遷',
+  '兰':'蘭','约':'約','较':'較','软':'軟','硬':'硬','盘':'盤','盒':'盒',
+  '拥':'擁','护':'護','择':'擇','触':'觸','缘':'緣','纠':'糾','绿':'綠',
+  '红':'紅','蓝':'藍','紫':'紫','黄':'黃','橙':'橙','粉':'粉','灰':'灰',
+  '黑':'黑','白':'白','亿':'億','尝':'嘗','冲':'衝','错':'錯','档':'檔',
+  '灯':'燈','递':'遞','吨':'噸','额':'額','购':'購','坏':'壞','汇':'匯',
+  '获':'獲','鸡':'雞','积':'積','监':'監','将':'將','奖':'獎','竞':'競',
+  '据':'據','劳':'勞','乱':'亂','满':'滿','梦':'夢','脑':'腦','评':'評',
+  '气':'氣','热':'熱','试':'試','税':'稅','台':'臺','习':'習','异':'異',
+  '预':'預','鸡':'雞','历':'歷','厂':'廠','齿':'齒','虫':'蟲','聪':'聰',
+  '达':'達','胆':'膽','弹':'彈','导':'導','动':'動','夺':'奪','该':'該',
+  '规':'規','柜':'櫃','坏':'壞','几':'幾','继':'繼','价':'價','将':'將',
+  '竞':'競','龙':'龍','买':'買','卖':'賣','迁':'遷','亲':'親','认':'認',
+  '师':'師','随':'隨','铁':'鐵','图':'圖','员':'員','战':'戰','着':'著',
+  '证':'證','专':'專','规':'規','观':'觀','产':'產','历':'歷','进':'進',
+  '见':'見','经':'經','来':'來','两':'兩','没':'沒','起':'起','说':'說',
+  '时':'時','同':'同','问':'問','为':'為','现':'現','些':'些','样':'樣',
+  '这':'這','只':'只','中':'中','种':'種','知':'知','就':'就','里':'裡',
+  '边':'邊','变':'變','补':'補','传':'傳','创':'創','带':'帶','当':'當',
+  '点':'點','断':'斷','对':'對','妈':'媽','风':'風','华':'華','号':'號',
+  '环':'環','换':'換','见':'見','联':'聯','临':'臨','领':'領','乱':'亂',
+  '农':'農','亲':'親','声':'聲','数':'數','树':'樹','双':'雙','头':'頭',
+  '团':'團','卫':'衛','无':'無','线':'線','响':'響','写':'寫','选':'選',
+  '严':'嚴','业':'業','议':'議','应':'應','远':'遠','运':'運','张':'張',
+  '质':'質','终':'終','众':'眾','准':'準'
+};
+
+function applyS2T(text) {
+    if (!text) return text;
+    // 優先使用 OpenCC（台灣慣用語轉換，準確度遠高於字元對照表）
+    if (twConverter) {
+        try { return twConverter(text); } catch(e) {}
+    }
+    // Fallback：字元對照表
+    return text.split('').map(ch => S2T_MAP[ch] || ch).join('');
+}
+
+// 手動一鍵 OpenCC 繁體優化（套用至當前逐字稿）
+function manualOpenCC() {
+    if (!parsedResult?.transcript) { toast('尚無逐字稿可轉換', 'err'); return; }
+    const converter = twConverter;
+    if (!converter) { toast('OpenCC 尚未載入，請確認網路連線後重新整理', 'err'); return; }
+    parsedResult.transcript.forEach(line => {
+        if (line.text) line.text = converter(line.text);
+    });
+    renderResults();
+    toast('已完成台灣繁體用語優化', 'ok');
+}
+
+// 後處理：移除重複幻覺段落，並套用繁簡轉換
+function sanitizeResult(result, langCode) {
+    if (!result?.transcript) return result;
+    const doS2T = (langCode === 'zh-TW');
+    const seen = new Set();
+    const seenNorm = new Set(); // 正規化後比較，避免空白差異
+
+    result.transcript = result.transcript.filter(line => {
+        let key = (line.text || '').trim();
+
+        // 移除無意義內容：空白、特殊符號幻覺、過短、純符號
+        if (!key || /^[\s①-⑳❶-❿●◎○□△※★♪♫]+$/.test(key)) return false;
+        if (key === '[不清楚]' || key === '[音樂]' || key === '[掌聲]') return true; // 保留標記
+
+        // 修正單字大量重複（例如"問問問問問問..."）
+        key = key.replace(/(.)\1{3,}/g, (_, ch) => ch + ch);
+
+        // 修正詞語大量重複（例如"大家好大家好大家好..."）
+        const repMatch = key.match(/(.{2,20})\1{2,}/);
+        if (repMatch) {
+            const phrase = repMatch[1];
+            const startIdx = key.indexOf(phrase);
+            key = key.substring(0, startIdx + phrase.length * 2).trim() + '…';
+        }
+
+        // 移除段落結尾重複（"先記得剛剛先記得剛剛" 型態）
+        key = key.replace(/^(.{3,30})\1+/, '$1');
+
+        // 移除無法辨識符號（❶❷ 等圓圈數字及特殊字）
+        key = key.replace(/[①-⑳❶-❿＠-Ｚ❷]/g, '').trim();
+        if (!key) return false;
+
+        // 套用繁簡轉換（必須在重複偵測前套用，否則簡體版本不在 seen 中）
+        if (doS2T) key = applyS2T(key);
+        line.text = key;
+
+        // 重複段落過濾（正規化：去除空白後比較）
+        const norm = key.replace(/\s/g,'');
+        if (seen.has(key) || seenNorm.has(norm)) return false;
+        seen.add(key); seenNorm.add(norm);
+        return true;
+    });
+    return result;
+}
+
+function finishTranscription() {
+    renderResults();
+    document.getElementById('loadingModal').classList.remove('show');
+    updateStartBtn();
+    document.getElementById('navEditor').style.display='flex';
+    // 若 OpenCC 已載入則顯示繁體優化按鈕
+    const openccBtn = document.getElementById('openccBtn');
+    if (openccBtn) openccBtn.style.display = twConverter ? '' : 'none';
+    goSection('subtitleEditor');
+    autoSaveProject();
+    toast('轉錄完成！已儲存至「我的專案」', 'ok');
+}
+
+// ══════════════════════════════════════════
+// 渲染結果
+// ══════════════════════════════════════════
+function renderResults() {
+    if(!parsedResult?.transcript) return;
+    // 每次渲染前從 localStorage 重新載入詞庫，確保最新關鍵字生效
+    try { const s=localStorage.getItem('fatKeywords'); if(s) fatKeywords=JSON.parse(s); } catch{}
+    const useFH=document.getElementById('enableFatHighlight').checked;
+    const showDiar=document.getElementById('enableDiarization').checked;
+    const showTime=document.getElementById('enableTimestamps').checked;
+    const tb=document.getElementById('transcriptBox');
+    const curSize=parseInt(tb.style.fontSize)||14;
+    let words=0, html='';
+    parsedResult.transcript.forEach((line,i)=>{
+        let text=line.text||''; words+=text.replace(/\s/g,'').length;
+        if(useFH&&fatKeywords.length){
+            fatKeywords.forEach(kw=>{
+                const re=new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+                text=text.replace(re,'<mark class="fh">$&</mark>');
+            });
+        }
+        const sp=(line.speaker&&showDiar)?`<span class="sp-tag">${line.speaker}</span> `:'';
+        const tcStr=(line.start&&showTime)?`<span class="tr-tc" data-i="${i}" style="font-size:${Math.max(9,curSize*0.72)}px;">${formatTC(line.start)}</span>`:'';
+        html+=`<div class="tr-line" data-i="${i}">${tcStr}${sp}<span class="tr-txt" contenteditable="true" data-i="${i}">${text}</span></div>`;
+    });
+    tb.innerHTML=html;
+    document.getElementById('statsPanel').style.display='grid';
+    document.getElementById('statSegments').textContent=parsedResult.transcript.length;
+    document.getElementById('statWordCount').textContent=words.toLocaleString();
+    const m=Math.floor(audioDuration/60),s=Math.floor(audioDuration%60);
+    document.getElementById('statDuration').textContent=`${p2(m)}:${p2(s)}`;
+    const hasCh=parsedResult.chapters?.length>0;
+    document.getElementById('chaptersContainer').style.display=hasCh?'flex':'none';
+    if(hasCh){
+        document.getElementById('chapterList').innerHTML=parsedResult.chapters.map(ch=>
+            `<div class="chi"><span class="cht">${ch.time}</span><span class="chl">${ch.title}</span></div>`
+        ).join('');
+    }
+}
+
+// ══════════════════════════════════════════
+// 專案管理（項目 › 資料夾 › 專案）
+// ══════════════════════════════════════════
+function getCategories() {
+    const raw = localStorage.getItem('vf_cats');
+    if (raw) { try { return JSON.parse(raw); } catch{} }
+    // 首次：從舊版 vf_projects 遷移
+    const old = JSON.parse(localStorage.getItem('vf_projects')||'[]');
+    const cats = [{ id:Date.now(), name:'未分類', open:true, folders:[{ id:Date.now()+1, name:'主要', open:true, projects:old }] }];
+    saveCats(cats); return cats;
+}
+function saveCats(cats){ localStorage.setItem('vf_cats',JSON.stringify(cats)); }
+function getTrash(){ return JSON.parse(localStorage.getItem('vf_trash')||'[]'); }
+function saveTrash(t){ localStorage.setItem('vf_trash',JSON.stringify(t)); }
+function getTrashDays(){ return parseInt(localStorage.getItem('vf_trash_days')||'30'); }
+function saveTrashDays(v){ localStorage.setItem('vf_trash_days',v); }
+
+// 自動清理過期垃圾
+function cleanTrash() {
+    const days = getTrashDays();
+    const cutoff = Date.now() - days*86400000;
+    saveTrash(getTrash().filter(t => new Date(t.deletedAt).getTime() > cutoff));
+}
+
+// 深層找專案
+function findProjInCats(cats, projId) {
+    for (const cat of cats) for (const f of cat.folders||[]) {
+        const p = (f.projects||[]).find(x=>x.id===projId);
+        if (p) return { cat, folder:f, proj:p };
+    } return null;
+}
+
+let projView = 'all';
+function setProjView(v) {
+    projView = v;
+    document.getElementById('projAllView').style.display  = v==='all'  ? '' : 'none';
+    document.getElementById('projTrashView').style.display= v==='trash' ? '' : 'none';
+    document.getElementById('projViewAll').classList.toggle('active', v==='all');
+    document.getElementById('projViewTrash').classList.toggle('active', v==='trash');
+    if (v==='trash') renderTrash(); else renderProjects();
+}
+
+function autoSaveProject() {
+    if(!parsedResult||!currentFile) return;
+    const words=parsedResult.transcript.reduce((a,l)=>a+(l.text||'').replace(/\s/g,'').length,0);
+    const autoName = (currentFile.name||'錄音').replace(/\.[^.]+$/,'');
+    if (!currentProjectId) { currentProjectName = autoName; }
+    const trIn = document.getElementById('trNameInput');
+    if (trIn) trIn.value = currentProjectName;
+    const proj={ id:Date.now(), name:currentProjectName,
+        fileName:currentFile.name||'mic', date:new Date().toISOString(),
+        lang:document.getElementById('langSelect').options[document.getElementById('langSelect').selectedIndex].text,
+        words, duration:audioDuration, result:parsedResult };
+    currentProjectId = proj.id;
+    const cats = getCategories();
+    // 預設放進第一個 category 的第一個 folder
+    if (!cats.length) cats.push({ id:Date.now(), name:'未分類', open:true, folders:[] });
+    if (!cats[0].folders.length) cats[0].folders.push({ id:Date.now()+1, name:'主要', open:true, projects:[] });
+    cats[0].folders[0].projects.unshift(proj);
+    if (cats[0].folders[0].projects.length > 50) cats[0].folders[0].projects.pop();
+    saveCats(cats);
+}
+
+function renderProjects() {
+    cleanTrash();
+    const cats = getCategories();
+    const grid = document.getElementById('projGrid');
+    const total = cats.reduce((a,c)=>a+c.folders.reduce((b,f)=>b+f.projects.length,0),0);
+    if (!total) { grid.innerHTML=`<div class="empty-state"><i class="fas fa-folder-open"></i><h3>尚無已儲存的專案</h3><p>完成 AI 轉錄後，專案將自動儲存於此。</p></div>`; return; }
+    grid.innerHTML = cats.map((cat,ci)=>`
+    <div class="cat-block">
+        <div class="cat-hd" onclick="toggleCat(${ci})">
+            <i class="fas fa-layer-group" style="color:var(--primary);font-size:13px;"></i>
+            <span class="cat-name" ondblclick="renameCat(event,${ci})">${esc(cat.name)}</span>
+            <button class="btn" style="padding:2px 7px;font-size:10.5px;" onclick="event.stopPropagation();renameCat(event,${ci})" title="重新命名項目"><i class="fas fa-pen"></i></button>
+            <button class="btn" style="padding:2px 7px;font-size:10.5px;" onclick="event.stopPropagation();addFolder(${ci})"><i class="fas fa-folder-plus"></i></button>
+            <button class="btn btn-danger" style="padding:2px 7px;font-size:10.5px;" onclick="event.stopPropagation();deleteCat(${ci})"><i class="fas fa-times"></i></button>
+            <i class="fas fa-chevron-right cat-toggle${cat.open?' open':''}"></i>
+        </div>
+        <div class="cat-body${cat.open?' open':''}">
+            ${(cat.folders||[]).map((f,fi)=>`
+            <div class="folder-block">
+                <div class="folder-hd" onclick="toggleFolder(${ci},${fi})">
+                    <i class="fas fa-folder" style="color:var(--primary);font-size:11px;"></i>
+                    <span class="folder-name" ondblclick="renameFolder(event,${ci},${fi})">${esc(f.name)}</span>
+                    <button class="btn" style="padding:2px 6px;font-size:10.5px;" onclick="event.stopPropagation();renameFolder(event,${ci},${fi})" title="重新命名資料夾"><i class="fas fa-pen"></i></button>
+                    <button class="btn btn-danger" style="padding:2px 6px;font-size:10.5px;" onclick="event.stopPropagation();deleteFolder(${ci},${fi})"><i class="fas fa-times"></i></button>
+                    <i class="fas fa-chevron-right cat-toggle${f.open?' open':''}" style="font-size:10px;"></i>
+                </div>
+                <div class="folder-body${f.open?' open':''}" data-ci="${ci}" data-fi="${fi}"
+                     ondragover="onFolderDragOver(event,this)" ondragleave="onFolderDragLeave(this)" ondrop="onFolderDrop(event,${ci},${fi})">
+                    <div class="folder-grid">
+                    ${(f.projects||[]).map(p=>`
+                    <div class="proj-card" draggable="true"
+                         onclick="loadProject(${p.id})"
+                         ondragstart="onProjDragStart(event,${p.id})"
+                         ondragend="onProjDragEnd(event)">
+                        <div class="pc-hd">
+                            <div class="pc-ico"><i class="fas fa-file-audio"></i></div>
+                            <div>
+                                <div class="pc-name" ondblclick="renameProj(event,${p.id})">${esc(p.name)}</div>
+                                <div class="pc-date">${fmtDate(p.date)}</div>
+                            </div>
+                        </div>
+                        <div class="pc-preview">${esc((p.result?.transcript?.[0]?.text||'').slice(0,70))}...</div>
+                        <div class="pc-meta">
+                            <span class="pc-tag">${esc(p.lang)}</span>
+                            <span class="pc-tag">${(p.words||0).toLocaleString()} 字</span>
+                            <div class="pc-actions">
+                                <button class="btn" style="padding:3px 8px;font-size:11px;" onclick="event.stopPropagation();renameProj(event,${p.id})" title="重新命名"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-danger" style="padding:3px 8px;font-size:11px;" onclick="trashProject(event,${p.id})"><i class="fas fa-trash"></i></button>
+                            </div>
+                        </div>
+                    </div>`).join('')}
+                    </div>
+                </div>
+            </div>`).join('')}
+        </div>
+    </div>`).join('');
+}
+
+function renderTrash() {
+    cleanTrash();
+    const trash = getTrash();
+    const grid = document.getElementById('trashGrid');
+    const days = getTrashDays();
+    if (!trash.length) { grid.innerHTML=`<div class="empty-state"><i class="fas fa-trash-can"></i><h3>垃圾桶是空的</h3><p>刪除的專案會保留 ${days} 天後永久刪除。</p></div>`; return; }
+    grid.innerHTML = trash.map((t,ti)=>`
+    <div class="trash-item">
+        <div class="pc-ico"><i class="fas fa-file-audio"></i></div>
+        <div class="trash-meta">
+            <div class="trash-name">${esc(t.proj.name)}</div>
+            <div class="trash-days">刪除於 ${fmtDate(t.deletedAt)}，剩餘 ${Math.max(0,days-Math.floor((Date.now()-new Date(t.deletedAt).getTime())/86400000))} 天</div>
+        </div>
+        <button class="btn" style="font-size:11.5px;padding:4px 10px;" onclick="restoreTrash(${ti})"><i class="fas fa-rotate-left"></i> 還原</button>
+        <button class="btn btn-danger" style="font-size:11.5px;padding:4px 10px;" onclick="permDeleteTrash(${ti})"><i class="fas fa-times"></i></button>
+    </div>`).join('');
+}
+
+function trashProject(e, id) {
+    e.stopPropagation();
+    const cats = getCategories();
+    const found = findProjInCats(cats, id);
+    if (!found) return;
+    const trash = getTrash();
+    trash.unshift({ deletedAt: new Date().toISOString(), proj: found.proj });
+    saveTrash(trash);
+    found.folder.projects = found.folder.projects.filter(p=>p.id!==id);
+    saveCats(cats);
+    renderProjects();
+    toast('已移至垃圾桶', 'ok');
+}
+
+function restoreTrash(ti) {
+    const trash = getTrash();
+    const item = trash.splice(ti, 1)[0];
+    saveTrash(trash);
+    const cats = getCategories();
+    if (!cats.length) cats.push({ id:Date.now(), name:'未分類', open:true, folders:[] });
+    if (!cats[0].folders.length) cats[0].folders.push({ id:Date.now()+1, name:'主要', open:true, projects:[] });
+    item.proj.id = Date.now(); // 新 id 避免衝突
+    cats[0].folders[0].projects.unshift(item.proj);
+    saveCats(cats);
+    renderTrash();
+    toast('已還原至「未分類 › 主要」', 'ok');
+}
+
+function permDeleteTrash(ti) {
+    if (!confirm('永久刪除此專案？此操作無法復原。')) return;
+    const trash = getTrash();
+    trash.splice(ti, 1);
+    saveTrash(trash);
+    renderTrash();
+    toast('已永久刪除', 'ok');
+}
+
+function loadProject(id) {
+    const cats = getCategories();
+    const found = findProjInCats(cats, id);
+    if (!found) return;
+    const p = found.proj;
+    parsedResult = p.result;
+    audioDuration = p.duration || 0;
+    currentFile = null;
+    currentProjectId = p.id;
+    currentProjectName = p.name || '未命名專案';
+    document.getElementById('fileBar').style.display = 'none';
+    document.getElementById('navEditor').style.display = 'flex';
+    const trIn = document.getElementById('trNameInput');
+    if (trIn) trIn.value = currentProjectName;
+    if (fatKeywords.length > 0) document.getElementById('enableFatHighlight').checked = true;
+    renderResults();
+    goSection('subtitleEditor');
+    toast(`已載入：${p.name}`, 'ok');
+}
+
+function addCategory() {
+    const name = prompt('輸入新項目名稱：', '新項目');
+    if (!name) return;
+    const cats = getCategories();
+    cats.push({ id:Date.now(), name:name.trim(), open:true, folders:[{ id:Date.now()+1, name:'主要', open:true, projects:[] }] });
+    saveCats(cats);
+    renderProjects();
+}
+
+function addFolder(ci) {
+    const name = prompt('輸入資料夾名稱：', '新資料夾');
+    if (!name) return;
+    const cats = getCategories();
+    cats[ci].folders.push({ id:Date.now(), name:name.trim(), open:true, projects:[] });
+    saveCats(cats);
+    renderProjects();
+}
+
+function deleteCat(ci) {
+    const cats = getCategories();
+    if (!confirm(`刪除項目「${cats[ci].name}」及其所有資料夾和專案嗎？`)) return;
+    // 移至垃圾桶
+    const trash = getTrash();
+    (cats[ci].folders||[]).forEach(f=>(f.projects||[]).forEach(p=>trash.unshift({deletedAt:new Date().toISOString(),proj:p})));
+    saveTrash(trash);
+    cats.splice(ci,1);
+    saveCats(cats);
+    renderProjects();
+}
+
+function deleteFolder(ci, fi) {
+    const cats = getCategories();
+    if (!confirm(`刪除資料夾「${cats[ci].folders[fi].name}」及其所有專案嗎？`)) return;
+    const trash = getTrash();
+    (cats[ci].folders[fi].projects||[]).forEach(p=>trash.unshift({deletedAt:new Date().toISOString(),proj:p}));
+    saveTrash(trash);
+    cats[ci].folders.splice(fi,1);
+    saveCats(cats);
+    renderProjects();
+}
+
+function toggleCat(ci) {
+    const cats = getCategories();
+    cats[ci].open = !cats[ci].open;
+    saveCats(cats);
+    renderProjects();
+}
+
+function toggleFolder(ci, fi) {
+    const cats = getCategories();
+    cats[ci].folders[fi].open = !cats[ci].folders[fi].open;
+    saveCats(cats);
+    renderProjects();
+}
+
+function renameCat(e, ci) {
+    e.stopPropagation();
+    const cats = getCategories();
+    const name = prompt('重新命名項目：', cats[ci].name);
+    if (!name) return;
+    cats[ci].name = name.trim();
+    saveCats(cats);
+    renderProjects();
+}
+
+function renameFolder(e, ci, fi) {
+    e.stopPropagation();
+    const cats = getCategories();
+    const name = prompt('重新命名資料夾：', cats[ci].folders[fi].name);
+    if (!name) return;
+    cats[ci].folders[fi].name = name.trim();
+    saveCats(cats);
+    renderProjects();
+}
+
+function renameProj(e, id) {
+    e.stopPropagation();
+    const cats = getCategories();
+    const found = findProjInCats(cats, id);
+    if (!found) return;
+    const name = prompt('重新命名專案：', found.proj.name);
+    if (!name) return;
+    found.proj.name = name.trim();
+    saveCats(cats);
+    // 若正在編輯此專案，同步更新逐字稿標題
+    if (id === currentProjectId) {
+        currentProjectName = found.proj.name;
+        const trIn = document.getElementById('trNameInput');
+        if (trIn) trIn.value = currentProjectName;
+    }
+    renderProjects();
+}
+
+function fmtDate(iso) {
+    const d=new Date(iso);
+    return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+
+// ══════════════════════════════════════════
+// 專案拖曳分類
+// ══════════════════════════════════════════
+let _dragProjId = null;
+function onProjDragStart(e, id) {
+    _dragProjId = id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.classList.add('dragging');
+}
+function onProjDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+}
+function onFolderDragOver(e, el) {
+    if (_dragProjId === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    el.classList.add('drag-over');
+}
+function onFolderDragLeave(el) {
+    el.classList.remove('drag-over');
+}
+function onFolderDrop(e, ci, fi) {
+    e.preventDefault();
+    const el = e.currentTarget;
+    el.classList.remove('drag-over');
+    if (_dragProjId === null) return;
+    const id = _dragProjId; _dragProjId = null;
+    const cats = getCategories();
+    const found = findProjInCats(cats, id);
+    if (!found) return;
+    const target = cats[ci]?.folders[fi];
+    if (!target) return;
+    // 若同一資料夾則略過
+    if (found.folder === target) return;
+    // 移除原位置
+    found.folder.projects = found.folder.projects.filter(p=>p.id!==id);
+    // 加入目標資料夾
+    target.projects.unshift(found.proj);
+    saveCats(cats);
+    renderProjects();
+    toast(`已移至「${cats[ci].name} › ${target.name}」`, 'ok');
+}
+
+// ══════════════════════════════════════════
+// 使用者登入（模擬）
+// ══════════════════════════════════════════
+const ACOLORS=['#4a7cf7','#22c97e','#f05c7d','#9b5cf0','#06c4d4','#d4a254','#f09422'];
+function hashStr(s){ let h=0; for(const c of s) h=(h*31+c.charCodeAt(0))|0; return Math.abs(h); }
+function emailToName(e){ const p=e.split('@')[0]; return p.replace(/[._\-+]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase()); }
+function avatarColor(e){ return ACOLORS[hashStr(e)%ACOLORS.length]; }
+
+function openLogin() {
+    const u=JSON.parse(localStorage.getItem('vf_user')||'null');
+    if(u){
+        document.getElementById('loginStep1').style.display='none';
+        document.getElementById('loginStep2').style.display='none';
+        document.getElementById('loginLogout').style.display='block';
+        document.getElementById('loginTitle').innerHTML='<i class="fas fa-user-circle" style="color:var(--primary);margin-right:7px;"></i>帳號資訊';
+        const av=document.getElementById('logoutAvatar');
+        av.textContent=u.name[0].toUpperCase();
+        av.style.background=u.color;
+        document.getElementById('logoutName').textContent=u.name;
+        document.getElementById('logoutEmail').textContent=u.email;
+    } else {
+        document.getElementById('loginStep1').style.display='block';
+        document.getElementById('loginStep2').style.display='none';
+        document.getElementById('loginLogout').style.display='none';
+        document.getElementById('loginTitle').innerHTML='<i class="fas fa-user-circle" style="color:var(--primary);margin-right:7px;"></i>登入 / 註冊';
+    }
+    document.getElementById('loginModal').classList.add('show');
+}
+
+function socialLogin(provider) {
+    const name=provider==='google'?'Google':'Facebook';
+    document.getElementById('loginEmail').placeholder=`your@${name==='Google'?'gmail':'facebook'}.com`;
+    toast(`請輸入您的 ${name} Email 地址`, 'ok');
+    document.getElementById('loginEmail').focus();
+}
+
+function doEmailLogin() {
+    const email=document.getElementById('loginEmail').value.trim();
+    const customName=document.getElementById('loginDisplayName').value.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+        document.getElementById('loginErr').style.display='block'; return;
+    }
+    document.getElementById('loginErr').style.display='none';
+    const name=customName||emailToName(email);
+    const color=avatarColor(email);
+    pendingUser={name,email,color};
+    const av=document.getElementById('loginAvatar');
+    av.textContent=name[0].toUpperCase();
+    av.style.background=color;
+    document.getElementById('loginWelcomeName').textContent=name;
+    document.getElementById('loginWelcomeEmail').textContent=email;
+    document.getElementById('loginStep1').style.display='none';
+    document.getElementById('loginStep2').style.display='block';
+}
+
+function confirmLogin() {
+    if(!pendingUser) return;
+    localStorage.setItem('vf_user', JSON.stringify(pendingUser));
+    updateUserUI();
+    closeModal('loginModal');
+    toast(`歡迎，${pendingUser.name}！`, 'ok');
+    pendingUser=null;
+}
+
+function doLogout() {
+    localStorage.removeItem('vf_user');
+    updateUserUI();
+    closeModal('loginModal');
+    toast('已成功登出', 'ok');
+}
+
+function updateUserUI() {
+    const u=JSON.parse(localStorage.getItem('vf_user')||'null');
+    const av=document.getElementById('userAvatar');
+    const nm=document.getElementById('userName');
+    const sb=document.getElementById('userSub');
+    if(u){
+        av.textContent=u.name[0].toUpperCase();
+        av.style.background=u.color;
+        av.style.fontSize='13px';
+        av.querySelector?.('i')?.remove();
+        nm.textContent=u.name;
+        sb.textContent=u.email;
+    } else {
+        av.innerHTML='<i class="fas fa-user" style="font-size:11px;color:var(--text-tertiary)"></i>';
+        av.style.background='rgba(255,255,255,.12)';
+        nm.textContent='點擊登入';
+        sb.textContent='訪客模式';
+    }
+}
+
+// ══════════════════════════════════════════
+// 後台設定 (Admin Gate)
+// ══════════════════════════════════════════
+function isAdminSessionValid() {
+    return Date.now() < parseInt(localStorage.getItem('vf_admin_session') || '0');
+}
+function saveAdminSession() {
+    localStorage.setItem('vf_admin_session', Date.now() + 86400000); // 24 小時
+}
+function clearAdminSession() {
+    localStorage.removeItem('vf_admin_session');
+}
+
+document.getElementById('settingsBtn').onclick = () => {
+    if (isAdminSessionValid()) {
+        openSettings(); // 24h 內免重新輸入密碼
+        return;
+    }
+    document.getElementById('gateUser').value = '';
+    document.getElementById('gatePass').value = '';
+    document.getElementById('gateErr').style.display = 'none';
+    document.getElementById('loginGateModal').classList.add('show');
+    setTimeout(() => document.getElementById('gateUser').focus(), 80);
+};
+
+function doAdminLogin() {
+    if (document.getElementById('gateUser').value.trim() === gs('adminUser') &&
+        document.getElementById('gatePass').value === gs('adminPass')) {
+        saveAdminSession();
+        closeModal('loginGateModal');
+        openSettings();
+    } else {
+        document.getElementById('gateErr').style.display = 'block';
+        document.getElementById('gatePass').value = '';
+    }
+}
+
+function adminLogout() {
+    clearAdminSession();
+    closeModal('settingsModal');
+    toast('已登出後台', 'ok');
+}
+
+function openSettings() {
+    document.getElementById('sName').value=gs('siteName');
+    document.getElementById('sTitle').value=gs('pageTitle');
+    document.getElementById('sApiKey').value=gs('apiKey');
+    document.getElementById('sNewUser').value='';
+    document.getElementById('sNewPass').value='';
+    document.getElementById('sModelSize').value=gs('modelSize');
+    const stcf = document.getElementById('sTCFormat');
+    if (stcf) stcf.value = localStorage.getItem('vf_tc_format') || '8';
+    // sync all CPWs with saved values
+    document.querySelectorAll('.cpw[data-key]').forEach(cpw=>syncCPW(cpw, gs(cpw.dataset.key)));
+    switchTab('general');
+    document.getElementById('settingsModal').classList.add('show');
+}
+
+function switchTab(id) {
+    document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+        const ids=['general','colors','advanced'];
+        b.classList.toggle('active',ids[i]===id);
+    });
+    document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+    document.getElementById('tab-'+id).classList.add('active');
+}
+
+function saveSettings() {
+    const name=document.getElementById('sName').value.trim();
+    const title=document.getElementById('sTitle').value.trim();
+    const apiKey=document.getElementById('sApiKey').value.trim();
+    const nu=document.getElementById('sNewUser').value.trim();
+    const np=document.getElementById('sNewPass').value;
+    const ms=document.getElementById('sModelSize').value;
+    if(name) ss('siteName',name);
+    if(title) ss('pageTitle',title);
+    if(apiKey) ss('apiKey',apiKey);
+    if(nu) ss('adminUser',nu);
+    if(np) ss('adminPass',np);
+    ss('modelSize',ms);
+    // TC format
+    const stcf = document.getElementById('sTCFormat');
+    if (stcf) {
+        tcFormat = stcf.value;
+        localStorage.setItem('vf_tc_format', tcFormat);
+        const tcSel = document.getElementById('tcFormatSel');
+        if (tcSel) tcSel.value = tcFormat;
+        const badge = document.getElementById('tcFmtBadge');
+        if (badge) badge.textContent = tcFormat==='8'?'8碼 SMPTE':'9碼 SRT';
+    }
+    // save all color CPWs
+    document.querySelectorAll('.cpw[data-key]').forEach(cpw=>{
+        const hex=cpw.querySelector('.cpw-native').value;
+        if(hex) ss(cpw.dataset.key, hex);
+    });
+    applyColors(); applySiteInfo();
+    if (parsedResult?.transcript) renderResults();
+    closeModal('settingsModal');
+    onModelChange();
+    toast('設定已儲存', 'ok');
+}
+
+// ══════════════════════════════════════════
+// WYSIWYG 字幕控制
+// ══════════════════════════════════════════
+const SUB_DEFAULTS = { size:'28', color:'#FFFFFF', bgcolor:'#000000', alpha:'0', shadow:true, font:'', pos:'bc' };
+
+function loadSubtitleStyles() {
+    const g = k => localStorage.getItem('vf_sub_'+k) ?? SUB_DEFAULTS[k];
+    document.getElementById('subSize').value    = g('size');
+    document.getElementById('subColor').value   = g('color');
+    document.getElementById('subBgColor').value = g('bgcolor');
+    document.getElementById('subBgAlpha').value = g('alpha');
+    document.getElementById('subShadow').checked= g('shadow')==='true'||g('shadow')===true;
+    document.getElementById('subFont').value    = g('font');
+    const savedPos = g('pos');
+    document.querySelectorAll('.gb').forEach(b => b.classList.toggle('active', b.dataset.pos===savedPos));
+}
+
+function saveSubtitleStyles() {
+    const s = k => localStorage.setItem('vf_sub_'+k, k==='shadow'
+        ? document.getElementById('subShadow').checked
+        : document.getElementById(k==='size'?'subSize':k==='color'?'subColor':k==='bgcolor'?'subBgColor':k==='alpha'?'subBgAlpha':'subFont').value);
+    ['size','color','bgcolor','alpha','shadow','font'].forEach(s);
+    localStorage.setItem('vf_sub_pos', document.querySelector('.gb.active')?.dataset.pos||'bc');
+}
+
+function applySubStyle() {
+    const ov = document.getElementById('subOv');
+    const size   = document.getElementById('subSize').value;
+    const color  = document.getElementById('subColor').value;
+    const bgHex  = document.getElementById('subBgColor').value;
+    const alpha  = document.getElementById('subBgAlpha').value;
+    const shadow = document.getElementById('subShadow').checked;
+    const font   = document.getElementById('subFont').value;
+    const r=parseInt(bgHex.slice(1,3),16),g2=parseInt(bgHex.slice(3,5),16),b=parseInt(bgHex.slice(5,7),16);
+    ov.style.fontSize  = size + 'px';
+    ov.style.color     = color;
+    ov.style.backgroundColor = `rgba(${r},${g2},${b},${alpha})`;
+    ov.style.textShadow= shadow ? '2px 2px 6px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9)' : 'none';
+    ov.style.fontFamily= font;
+    // 同步套用至逐字稿預覽
+    const tb = document.getElementById('transcriptBox');
+    const trFontSz = Math.max(12, parseInt(size)*0.55);
+    tb.style.fontSize  = trFontSz + 'px';
+    tb.style.color     = color;
+    tb.style.fontFamily= font;
+    // 時間碼字型同步縮放
+    document.querySelectorAll('.tr-tc').forEach(el => {
+        el.style.fontSize = Math.max(9, trFontSz * 0.72) + 'px';
+    });
+    saveSubtitleStyles();
+}
+
+function applyGridPos(pos) {
+    const ov = document.getElementById('subOv');
+    document.querySelectorAll('.gb').forEach(b=>b.classList.remove('active'));
+    document.querySelector(`.gb[data-pos="${pos}"]`)?.classList.add('active');
+    Object.assign(ov.style,{top:'auto',bottom:'auto',left:'auto',right:'auto',transform:'none',width:'80%',textAlign:'center'});
+    if(pos[0]==='t') ov.style.top='7%';
+    if(pos[0]==='b') ov.style.bottom='7%';
+    if(pos[0]==='m'){ ov.style.top='50%'; ov.style.transform='translateY(-50%)'; }
+    if(pos[1]==='l'){ ov.style.left='4%'; ov.style.textAlign='left'; ov.style.width='46%'; }
+    if(pos[1]==='r'){ ov.style.right='4%'; ov.style.left='auto'; ov.style.textAlign='right'; ov.style.width='46%'; }
+    if(pos[1]==='c'){ ov.style.left='10%'; ov.style.textAlign='center'; }
+    saveSubtitleStyles();
+}
+
+function updateSafeZone(val) {
+    document.getElementById('szTK').classList.remove('show');
+    document.getElementById('szYT').classList.remove('show');
+    if (val==='tiktok') document.getElementById('szTK').classList.add('show');
+    if (val==='yt')     document.getElementById('szYT').classList.add('show');
+}
+
+function setupWYSIWYG() {
+    loadSubtitleStyles();
+    // 定位按鈕
+    document.querySelectorAll('.gb').forEach(btn=>{
+        btn.onclick=()=>applyGridPos(btn.dataset.pos);
+    });
+    // 初始套用樣式
+    applySubStyle();
+    const savedPos = localStorage.getItem('vf_sub_pos') || SUB_DEFAULTS.pos;
+    applyGridPos(savedPos);
+}
+
+// ══════════════════════════════════════════
+// 播放控制
+// ══════════════════════════════════════════
+function togglePlay() {
+    if (!currentMedia) return;
+    if (currentMedia.paused) { currentMedia.play(); document.getElementById('playIcon').className='fas fa-pause'; }
+    else { currentMedia.pause(); document.getElementById('playIcon').className='fas fa-play'; }
+}
+
+function skipMedia(sec) {
+    if (!currentMedia) return;
+    currentMedia.currentTime = Math.max(0, Math.min(currentMedia.duration||0, currentMedia.currentTime + sec));
+}
+
+function seekTo(val) {
+    if (!currentMedia || !currentMedia.duration) return;
+    currentMedia.currentTime = (val / 100) * currentMedia.duration;
+}
+
+function setPlaySpeed(val) {
+    if (currentMedia) currentMedia.playbackRate = parseFloat(val);
+}
+
+function initSeekBar(el) {
+    const sb = document.getElementById('seekBar');
+    if (sb) { sb.value=0; }
+    updateTimeDisp(el);
+}
+
+function updateSeekBar(el) {
+    const sb = document.getElementById('seekBar');
+    if (sb && el.duration) sb.value = (el.currentTime / el.duration) * 100;
+    updateTimeDisp(el);
+}
+
+function updateTimeDisp(el) {
+    const td = document.getElementById('timeDisplay');
+    if (!td) return;
+    const fmt = s => `${p2(Math.floor(s/60))}:${p2(Math.floor(s%60))}`;
+    td.textContent = `${fmt(el.currentTime||0)} / ${fmt(el.duration||0)}`;
+}
+
+// ══════════════════════════════════════════
+// 尋找 / 取代
+// ══════════════════════════════════════════
+function doFind() {
+    const q = document.getElementById('findInput').value.trim();
+    findMatches = [];
+    findIdx = 0;
+    if (!parsedResult?.transcript || !q) { document.getElementById('findCount').textContent=''; renderResults(); return; }
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+    parsedResult.transcript.forEach((line, li) => {
+        let m;
+        while ((m = re.exec(line.text||'')) !== null) findMatches.push({ li, start: m.index, len: m[0].length });
+    });
+    document.getElementById('findCount').textContent = findMatches.length ? `${findIdx+1}/${findMatches.length}` : '無結果';
+    renderResultsWithFind(q);
+}
+
+function findStep(dir) {
+    if (!findMatches.length) return;
+    findIdx = (findIdx + dir + findMatches.length) % findMatches.length;
+    document.getElementById('findCount').textContent = `${findIdx+1}/${findMatches.length}`;
+    renderResultsWithFind(document.getElementById('findInput').value.trim());
+    // 滾動到當前匹配
+    const cur = document.querySelector('mark.fnd.cur');
+    if (cur) cur.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function renderResultsWithFind(q) {
+    if (!parsedResult?.transcript) return;
+    const re = q ? new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi') : null;
+    const useFH = document.getElementById('enableFatHighlight').checked;
+    const showTime = document.getElementById('enableTimestamps').checked;
+    const showDiar = document.getElementById('enableDiarization').checked;
+    let html = '';
+    parsedResult.transcript.forEach((line, li) => {
+        let text = line.text || '';
+        if (useFH && fatKeywords.length) {
+            fatKeywords.forEach(kw => { const r2=new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'); text=text.replace(r2,'<mark class="fh">$&</mark>'); });
+        }
+        if (re) {
+            let mIdx = 0;
+            text = text.replace(re, (m) => {
+                const globalIdx = findMatches.filter(f=>f.li<li).length + mIdx;
+                const isCur = globalIdx === findIdx;
+                mIdx++;
+                return `<mark class="fnd${isCur?' cur':''}">${m}</mark>`;
+            });
+        }
+        const sp = (line.speaker&&showDiar) ? `<span class="sp-tag">${line.speaker}</span>` : '';
+        const ts = (line.start&&showTime) ? `<span class="ts-tag">[${line.start.split(',')[0]}]</span>` : '';
+        html += `<div style="margin-bottom:8px;line-height:1.9;" data-i="${li}">${ts}${sp}<span>${text}</span></div>`;
+    });
+    document.getElementById('transcriptBox').innerHTML = html;
+}
+
+function doReplaceOne() {
+    if (!findMatches.length || !parsedResult?.transcript) return;
+    const rep = document.getElementById('replaceInput').value;
+    const q   = document.getElementById('findInput').value.trim();
+    if (!q) return;
+    const m = findMatches[findIdx];
+    if (!m) return;
+    const line = parsedResult.transcript[m.li];
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i');
+    line.text = (line.text||'').replace(re, rep);
+    doFind();
+    toast('已取代 1 處', 'ok');
+}
+
+function doReplaceAll() {
+    if (!parsedResult?.transcript) return;
+    const q   = document.getElementById('findInput').value.trim();
+    const rep = document.getElementById('replaceInput').value;
+    if (!q) return;
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi');
+    let count = 0;
+    parsedResult.transcript.forEach(line => {
+        const before = line.text || '';
+        line.text = before.replace(re, () => { count++; return rep; });
+    });
+    doFind();
+    toast(`已取代 ${count} 處`, 'ok');
+}
+
+function updateLiveSub(t) {
+    if(!parsedResult?.transcript) return;
+    const ov=document.getElementById('subOv');
+    let txt='';
+    for(const l of parsedResult.transcript){
+        if(!l.start||!l.end) continue;
+        if(t>=t2s(l.start)&&t<=t2s(l.end)){ txt=l.text; break; }
+    }
+    ov.textContent=txt;
+}
+
+function t2s(str){ try{ const p=str.split(':'),sp=p[2].split(','); return +p[0]*3600+ +p[1]*60+ +sp[0]+ +sp[1]/1000; }catch{return 0;} }
+
+// ══════════════════════════════════════════
+// 時間碼格式轉換
+// ══════════════════════════════════════════
+// 內部儲存格式：HH:MM:SS,mmm (SRT)
+function srtToSecs(str) {
+    if (!str) return 0;
+    try {
+        const [hms, ms] = str.split(',');
+        const [h,m,s] = hms.split(':');
+        return parseInt(h)*3600 + parseInt(m)*60 + parseInt(s) + parseInt(ms||0)/1000;
+    } catch { return 0; }
+}
+function secsToSRT(t) {
+    const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60), ms=Math.round((t%1)*1000);
+    return `${p2(h)}:${p2(m)}:${p2(s)},${String(ms).padStart(3,'0')}`;
+}
+function formatTC(srtStr) {
+    if (!srtStr) return '--:--:--:--';
+    if (tcFormat === '9') {
+        // 9碼 SRT HH:MM:SS,mmm
+        return srtStr.includes(',') ? srtStr : srtStr.replace('.', ',');
+    }
+    // 8碼 SMPTE HH:MM:SS:FF (30fps)
+    const t = srtToSecs(srtStr);
+    const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60), ff=Math.floor((t%1)*30);
+    return `${p2(h)}:${p2(m)}:${p2(s)}:${p2(ff)}`;
+}
+function changeTCFormat(val) {
+    tcFormat = val;
+    localStorage.setItem('vf_tc_format', val);
+    document.getElementById('tcFmtBadge').textContent = val==='8' ? '8碼 SMPTE' : '9碼 SRT';
+    renderResults();
+}
+
+// ══════════════════════════════════════════
+// 逐字稿標題同步
+// ══════════════════════════════════════════
+function onTrNameChange() {
+    const name = document.getElementById('trNameInput').value.trim() || '未命名專案';
+    currentProjectName = name;
+    // 若有載入的專案，同步更新
+    if (currentProjectId) {
+        const cats = getCategories();
+        const found = findProjInCats(cats, currentProjectId);
+        if (found) { found.proj.name = name; saveCats(cats); }
+    }
+}
+
+// ══════════════════════════════════════════
+// 逐字稿 Enter 鍵斷行（自動分配時間碼）
+// ══════════════════════════════════════════
+function initTranscriptKeyHandler() {
+    document.getElementById('transcriptBox').addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        const span = e.target.closest('.tr-txt');
+        if (!span || !parsedResult?.transcript) return;
+        e.preventDefault();
+        const idx = parseInt(span.dataset.i);
+        // 取得游標位置
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        // 取得游標前後文字
+        const fullText = span.innerText || '';
+        const preRange = document.createRange();
+        preRange.setStart(span, 0);
+        preRange.setEnd(range.startContainer, range.startOffset);
+        const beforeText = preRange.toString();
+        const afterText = fullText.slice(beforeText.length);
+        // 更新當前行
+        parsedResult.transcript[idx].text = beforeText.trim();
+        // 計算新行時間碼
+        const cur = parsedResult.transcript[idx];
+        const curStart = srtToSecs(cur.start);
+        const curEnd = srtToSecs(cur.end);
+        const ratio = fullText.length > 0 ? beforeText.length / fullText.length : 0.5;
+        const splitTime = curStart + (curEnd - curStart) * Math.max(0.1, Math.min(0.9, ratio));
+        const newEntry = { start: secsToSRT(splitTime), end: cur.end, speaker: cur.speaker||'', text: afterText.trim() };
+        cur.end = secsToSRT(splitTime);
+        // 插入新行
+        parsedResult.transcript.splice(idx + 1, 0, newEntry);
+        renderResults();
+        // 聚焦新行
+        setTimeout(() => {
+            const newSpan = document.querySelector(`.tr-txt[data-i="${idx+1}"]`);
+            if (newSpan) { newSpan.focus(); placeCaretAtStart(newSpan); }
+        }, 30);
+    });
+    // 同步編輯文字回 parsedResult
+    document.getElementById('transcriptBox').addEventListener('input', function(e) {
+        const span = e.target.closest('.tr-txt');
+        if (!span || !parsedResult?.transcript) return;
+        const idx = parseInt(span.dataset.i);
+        if (parsedResult.transcript[idx]) parsedResult.transcript[idx].text = span.innerText.trim();
+    });
+}
+function placeCaretAtStart(el) {
+    const range = document.createRange();
+    range.setStart(el, 0); range.collapse(true);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(range);
+}
+
+// ══════════════════════════════════════════
+// 面板拖曳調整大小
+// ══════════════════════════════════════════
+function initResizers() {
+    // 左右拖曳（影片 vs 字幕控制）
+    const hHandle = document.getElementById('edResizer');
+    const leftPane = document.getElementById('edLeft');
+    const wrap = document.getElementById('edWrap');
+    if (hHandle && leftPane && wrap) {
+        let sx, sw;
+        hHandle.addEventListener('mousedown', e => {
+            sx=e.clientX; sw=leftPane.offsetWidth;
+            hHandle.classList.add('active');
+            document.addEventListener('mousemove', onHDrag);
+            document.addEventListener('mouseup', stopHDrag);
+            e.preventDefault();
+        });
+        function onHDrag(e) {
+            const nw = Math.max(180, Math.min(sw + e.clientX - sx, wrap.offsetWidth - 200));
+            leftPane.style.flex = `0 0 ${nw}px`;
+        }
+        function stopHDrag() {
+            hHandle.classList.remove('active');
+            document.removeEventListener('mousemove', onHDrag);
+            document.removeEventListener('mouseup', stopHDrag);
+        }
+    }
+    // 上下拖曳（ed-wrap vs tr-area）
+    const vHandle = document.getElementById('trResizer');
+    const trArea = document.getElementById('trArea');
+    const edWrap = document.getElementById('edWrap');
+    if (vHandle && trArea && edWrap) {
+        let sy, sh;
+        vHandle.addEventListener('mousedown', e => {
+            sy=e.clientY; sh=trArea.offsetHeight;
+            vHandle.classList.add('active');
+            document.addEventListener('mousemove', onVDrag);
+            document.addEventListener('mouseup', stopVDrag);
+            e.preventDefault();
+        });
+        function onVDrag(e) {
+            const delta = sy - e.clientY; // dragging up = bigger transcript
+            const nh = Math.max(120, sh + delta);
+            trArea.style.minHeight = nh + 'px';
+        }
+        function stopVDrag() {
+            vHandle.classList.remove('active');
+            document.removeEventListener('mousemove', onVDrag);
+            document.removeEventListener('mouseup', stopVDrag);
+        }
+    }
+}
+
+// ══════════════════════════════════════════
+// 匯出
+// ══════════════════════════════════════════
+function safeFilename(name) { return (name||'transcript').replace(/[\\/:*?"<>|]/g,'_'); }
+function exportTXT(){
+    const fname = safeFilename(currentProjectName) + '.txt';
+    dl(fname, document.getElementById('transcriptBox').innerText, 'text/plain;charset=utf-8');
+}
+function exportSRT(){
+    if(!parsedResult?.transcript){ toast('無轉錄結果','err'); return; }
+    if(!parsedResult.transcript[0]?.start){ toast('未生成時間戳記，無法匯出 SRT','err'); return; }
+    let s='';
+    parsedResult.transcript.forEach((l,i)=>{ if(l.start&&l.end) s+=`${i+1}\n${l.start} --> ${l.end}\n${l.text}\n\n`; });
+    dl(safeFilename(currentProjectName)+'.srt', s, 'text/plain;charset=utf-8');
+}
+function copyChapters(){ navigator.clipboard.writeText(document.getElementById('chapterList').innerText).then(()=>toast('章節已複製','ok')); }
+function dl(name,content,type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click(); }
+
+// ══════════════════════════════════════════
+// 關鍵字詞庫
+// ══════════════════════════════════════════
+function loadKeywords() {
+    const s = localStorage.getItem('fatKeywords');
+    if (s) { try { fatKeywords = JSON.parse(s); } catch { fatKeywords = []; } }
+    renderKeywords();
+}
+
+function saveKeywords() {
+    const input = document.getElementById('keywordInput');
+    const raw = input.value;
+    if (!raw.trim()) { toast('請先輸入關鍵字', 'err'); return; }
+    const words = raw.split(/[\n,，、；;]+/).map(x => x.trim()).filter(x => x.length > 0);
+    if (!words.length) { toast('未偵測到有效關鍵字', 'err'); return; }
+    fatKeywords = [...new Set([...fatKeywords, ...words])];
+    localStorage.setItem('fatKeywords', JSON.stringify(fatKeywords));
+    input.value = '';
+    renderKeywords();
+    // 立即套用至現有逐字稿
+    if (parsedResult?.transcript) {
+        document.getElementById('enableFatHighlight').checked = true;
+        renderResults();
+        showSaveHint();
+    } else {
+        toast(`已儲存 ${words.length} 個關鍵字`, 'ok');
+    }
+}
+
+function clearKeywords() {
+    if (!fatKeywords.length) return;
+    if (!confirm(`確定要清除全部 ${fatKeywords.length} 個關鍵字嗎？`)) return;
+    fatKeywords = [];
+    localStorage.setItem('fatKeywords', JSON.stringify(fatKeywords));
+    renderKeywords();
+    if (parsedResult?.transcript) renderResults();
+    toast('詞庫已清除', 'ok');
+}
+
+function reapplyHighlights() {
+    if (!parsedResult?.transcript) { toast('尚無逐字稿可套用', 'err'); return; }
+    if (!fatKeywords.length) { toast('詞庫為空，請先新增關鍵字', 'err'); return; }
+    document.getElementById('enableFatHighlight').checked = true;
+    renderResults();
+    toast(`已套用 ${fatKeywords.length} 個關鍵字標記`, 'ok');
+}
+
+function showSaveHint() {
+    const hint = document.getElementById('kwSaveHint');
+    hint.style.display = 'inline';
+    setTimeout(() => { hint.style.display = 'none'; }, 2500);
+    toast(`已儲存並套用 ${fatKeywords.length} 個關鍵字`, 'ok');
+}
+
+function removeKeyword(idx) {
+    fatKeywords.splice(idx, 1);
+    localStorage.setItem('fatKeywords', JSON.stringify(fatKeywords));
+    renderKeywords();
+    if (parsedResult?.transcript) renderResults();
+}
+
+function renderKeywords() {
+    const c = document.getElementById('keywordTags');
+    const cnt = document.getElementById('kwCount');
+    if (cnt) cnt.textContent = fatKeywords.length ? `(${fatKeywords.length})` : '';
+    if (!fatKeywords.length) {
+        c.innerHTML = '<span style="color:var(--text-tertiary);font-style:italic;font-size:12px;">尚無關鍵字</span>';
+        return;
+    }
+    c.innerHTML = fatKeywords.map((w, i) =>
+        `<span class="kw-tag">${esc(w)}<i class="fas fa-times kw-rm" onclick="removeKeyword(${i})"></i></span>`
+    ).join('');
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// ══════════════════════════════════════════
+// 共用
+// ══════════════════════════════════════════
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+let _tt=null;
+function toast(msg,type='ok'){ const el=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; el.className='toast '+type; el.querySelector('i').className=type==='ok'?'fas fa-check-circle':'fas fa-circle-xmark'; el.classList.add('show'); if(_tt) clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),3200); }
+</script>
+</body>
+</html>
