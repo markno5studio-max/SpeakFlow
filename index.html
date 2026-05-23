@@ -1164,12 +1164,26 @@ let tcFormat = localStorage.getItem('vf_tc_format') || '8'; // '8'=SMPTE HH:MM:S
 // ══════════════════════════════════════════
 // 初始化
 // ══════════════════════════════════════════
+// ── 頁面載入最早期：若已登入則立即隱藏登入牆（防止閃現）──
+(function earlyAuthCheck() {
+    try {
+        localStorage.removeItem('vf_auth_bypass');
+        const raw = localStorage.getItem('vf_user');
+        if (raw) {
+            const u = JSON.parse(raw);
+            if (u && u.name) {
+                const gate = document.getElementById('authGate');
+                if (gate) gate.classList.remove('show');
+            }
+        }
+    } catch(e) {}
+})();
+
 window.onload = () => {
     applyColors(); applySiteInfo(); setupNav();
     setupDrop(); loadKeywords(); loadReplacements(); setupWYSIWYG();
     renderProjects(); updateUserUI();
-    localStorage.removeItem('vf_auth_bypass'); // 每次開頁強制清除任何舊旁路 token
-    checkAuth();
+    checkAuth(); // 完整驗證（包含 hideAuthGate / showAuthGate）
     initFacebookSDK();
     onModelChange();
     setInputMode('file');
@@ -1701,73 +1715,53 @@ function encodeWAV(samples, sampleRate) {
 }
 
 // ── Gemini Files API 大型檔案上傳（> GEMINI_INLINE_LIMIT 時使用）──
-const GEMINI_INLINE_LIMIT = 18 * 1024 * 1024; // 18MB：超過則用 Files API
+// 使用 FormData multipart — 瀏覽器安全，無禁止標頭，CORS 相容
+const GEMINI_INLINE_LIMIT = 19 * 1024 * 1024; // 19MB：以下用 inline base64，以上用 Files API
 
 async function uploadToGeminiFiles(file, apiKey, lt) {
     const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-    lt.textContent = `大型檔案（${sizeMB} MB）初始化上傳通道...`;
+    lt.textContent = `上傳音訊至 Gemini Files API（${sizeMB} MB）...`;
 
-    // Step 1：建立可恢復上傳 session
-    const initResp = await fetch(
-        `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=resumable&key=${apiKey}`,
-        {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Upload-Protocol': 'resumable',
-                'X-Goog-Upload-Command': 'start',
-                'X-Goog-Upload-Header-Content-Length': String(file.size),
-                'X-Goog-Upload-Header-Content-Type': file.type || 'audio/mpeg'
-            },
-            body: JSON.stringify({ file: { displayName: file.name } })
-        }
+    // 使用 multipart FormData — 無需任何自訂標頭，瀏覽器 CORS 最友善
+    const meta = JSON.stringify({ file: { displayName: file.name || 'audio' } });
+    const form = new FormData();
+    form.append('metadata', new Blob([meta], { type: 'application/json' }));
+    form.append('file', file, file.name || 'audio');
+
+    const resp = await fetch(
+        `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=multipart&key=${apiKey}`,
+        { method: 'POST', body: form }
     );
-    if (!initResp.ok) {
-        const e = await initResp.json().catch(() => ({}));
-        throw new Error(`Files API 初始化失敗（${initResp.status}）：${e?.error?.message || ''}`);
-    }
-    const uploadUrl = initResp.headers.get('x-goog-upload-url');
-    if (!uploadUrl) throw new Error('無法取得 Files API 上傳 URL，請確認 API 金鑰有 Files API 存取權。');
 
-    // Step 2：上傳檔案本體
-    lt.textContent = `上傳音訊中（${sizeMB} MB），依網路速度需 10～60 秒...`;
-    const uploadResp = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Length': String(file.size),
-            'X-Goog-Upload-Offset': '0',
-            'X-Goog-Upload-Command': 'upload, finalize'
-        },
-        body: file
-    });
-    if (!uploadResp.ok) {
-        const e = await uploadResp.json().catch(() => ({}));
-        throw new Error(`Files API 上傳失敗（${uploadResp.status}）：${e?.error?.message || ''}`);
+    if (!resp.ok) {
+        const e = await resp.json().catch(() => ({}));
+        const msg = e?.error?.message || '';
+        if (resp.status === 403) throw new Error('API 金鑰無效或無 Files API 存取權限，請確認後重試。');
+        if (resp.status === 413) throw new Error(`檔案過大（${sizeMB}MB），請先壓縮音訊後重試。`);
+        throw new Error(`Files API 上傳失敗（HTTP ${resp.status}）：${msg || '請確認 API 金鑰'}`);
     }
-    const fileData = await uploadResp.json();
-    const fileUri  = fileData.file?.uri;
-    const fileName = fileData.file?.name;
+
+    const data = await resp.json();
+    const fileUri  = data.file?.uri;
+    const fileName = data.file?.name;
     if (!fileUri) throw new Error('上傳完成但未取得檔案 URI，請重試。');
 
-    // Step 3：等待伺服器處理（state: PROCESSING → ACTIVE）
-    let state = fileData.file?.state || 'PROCESSING';
+    // 等待伺服器處理（PROCESSING → ACTIVE）
+    let state = data.file?.state || 'PROCESSING';
     if (state !== 'ACTIVE') {
-        lt.textContent = '等待 Gemini 伺服器處理音訊（通常 5～30 秒）...';
-        for (let i = 0; i < 30; i++) {
-            await new Promise(r => setTimeout(r, 3000));
-            const stResp = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`
-            );
-            const stData = await stResp.json();
-            state = stData.state;
+        lt.textContent = '等待 Gemini 伺服器處理音訊（通常 5～20 秒）...';
+        for (let i = 0; i < 20; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            const st = await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`);
+            const sd = await st.json();
+            state = sd.state;
             if (state === 'ACTIVE') break;
-            if (state === 'FAILED') throw new Error('Gemini Files API 音訊處理失敗，請嘗試較小的檔案或重新上傳。');
-            lt.textContent = `等待伺服器處理（${(i + 1) * 3}s）...`;
+            if (state === 'FAILED') throw new Error('Gemini 音訊處理失敗，請確認音訊格式（建議 MP3/WAV）。');
+            lt.textContent = `等待伺服器處理音訊（${(i + 1) * 2}s）...`;
         }
-        if (state !== 'ACTIVE') throw new Error('Files API 處理超時，請重試。');
+        if (state !== 'ACTIVE') throw new Error('Files API 處理超時（40秒），請重試。');
     }
 
-    lt.textContent = '音訊上傳完成，開始辨識...';
     return { fileUri, mimeType: file.type || 'audio/mpeg' };
 }
 
@@ -2007,20 +2001,18 @@ async function runGeminiTranscription(model, lt) {
     const apiKey = gs('apiKey');
     if(!apiKey||apiKey.length<10) throw new Error('請先在後台設定中填入 Gemini API 金鑰。');
 
-    // ── 決定傳輸路徑：大型檔案用 Files API，小型檔案用 inline base64 ──
-    let audioPart; // { inlineData:{mimeType,data} } 或 { fileData:{mimeType,fileUri} }
+    // ── 決定傳輸路徑：小型檔案 inline base64 / 大型檔案 Files API ──
+    let audioPart;
+    const mimeType = currentFile.type || 'audio/mpeg';
     if (currentFile.size > GEMINI_INLINE_LIMIT) {
-        // 大型檔案（> 18MB）：直接上傳原始檔至 Files API，無需 WAV 轉換
-        const { fileUri, mimeType } = await uploadToGeminiFiles(currentFile, apiKey, lt);
-        audioPart = { fileData: { mimeType, fileUri } };
+        // 大型檔案（> 19MB）→ Files API multipart 上傳（無 WAV 轉換，最快）
+        const { fileUri, mimeType: fm } = await uploadToGeminiFiles(currentFile, apiKey, lt);
+        audioPart = { fileData: { mimeType: fm, fileUri } };
     } else {
-        // 小型檔案：轉換為 16kHz mono WAV 後 inline 傳送
-        lt.textContent = '正在重新取樣並壓縮音訊至 16kHz...';
-        const { b64, mimeType: audioMime } = await prepAudioForGemini(currentFile).catch(async () => {
-            const raw = await toB64(currentFile);
-            return { b64: raw, mimeType: currentFile.type || 'audio/mpeg' };
-        });
-        audioPart = { inlineData: { mimeType: audioMime, data: b64 } };
+        // 小型檔案（≤ 19MB）→ 直接 base64 原始檔，無需任何轉換，最快速
+        lt.textContent = '準備音訊資料（直接傳送，無需轉換）...';
+        const b64 = await toB64(currentFile);
+        audioPart = { inlineData: { mimeType, data: b64 } };
     }
     const langCode = document.getElementById('langSelect').value;
     const maxCh = document.getElementById('maxChars').value;
@@ -2056,57 +2048,71 @@ ${twRule}
         generationConfig: { temperature: 0, maxOutputTokens: 65536 }
     };
 
-    lt.textContent = `${modelLabel} 串流辨識中，請稍候...`;
+    lt.textContent = `${modelLabel} 辨識中，請稍候（大型音訊可能需 1～3 分鐘）...`;
 
-    // 使用串流 API 加快回應速度
-    const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
-    );
-
-    if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({}));
-        const c = errBody?.error?.code;
-        if (c === 429) throw new Error('API 呼叫達上限（Rate Limit）。請稍後再試或升級使用額度。');
-        if (c === 403) throw new Error('API 金鑰無效或無存取權限。請至後台設定確認 API 金鑰。');
-        throw new Error(errBody?.error?.message || `HTTP ${resp.status}`);
-    }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '', rawText = '';
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6).trim();
-            if (!data || data === '[DONE]') continue;
-            try {
-                const chunk = JSON.parse(data);
-                if (chunk.error) {
-                    const c = chunk.error.code;
-                    if (c === 429) throw new Error('API 呼叫達上限，請稍後再試。');
-                    throw new Error(chunk.error.message);
-                }
-                const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                rawText += part;
-                if (rawText.length > 0) lt.textContent = `${modelLabel} 辨識中，已接收 ${rawText.length} 字元...`;
-            } catch (e) {
-                if (e.message && !e.message.includes('JSON')) throw e;
+    // ── 嘗試串流 API，失敗時自動降級至標準 API ──
+    let rawText = '';
+    try {
+        const sseResp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+        );
+        if (!sseResp.ok) {
+            const eb = await sseResp.json().catch(() => ({}));
+            const c = eb?.error?.code || sseResp.status;
+            if (c === 429) throw new Error('API 呼叫達上限（429 Rate Limit）。請稍後再試或升級使用額度。');
+            if (c === 403) throw new Error('API 金鑰無效或無存取權限（403）。請至後台設定確認 Gemini API 金鑰。');
+            throw new Error(eb?.error?.message || `HTTP ${sseResp.status}`);
+        }
+        const reader = sseResp.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop() ?? '';
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const d = line.slice(6).trim();
+                if (!d || d === '[DONE]') continue;
+                try {
+                    const chunk = JSON.parse(d);
+                    if (chunk.error) {
+                        if (chunk.error.code === 429) throw new Error('API 呼叫達上限，請稍後再試。');
+                        throw new Error(chunk.error.message);
+                    }
+                    const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    rawText += part;
+                    if (rawText.length > 0) lt.textContent = `${modelLabel} 辨識中，已接收 ${rawText.length} 字元...`;
+                } catch(ex) { if (ex.message && !ex.message.includes('JSON')) throw ex; }
             }
         }
+    } catch(streamErr) {
+        // 串流失敗 → 降級至標準（非串流）API
+        if (streamErr.message && (streamErr.message.includes('API 呼叫達上限') || streamErr.message.includes('403'))) throw streamErr;
+        lt.textContent = `串流失敗，改用標準 API 重試（${streamErr.message?.slice(0,40) || ''}）...`;
+        const stdResp = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+        );
+        if (!stdResp.ok) {
+            const eb = await stdResp.json().catch(() => ({}));
+            const c = eb?.error?.code || stdResp.status;
+            if (c === 429) throw new Error('API 呼叫達上限（429 Rate Limit）。請稍後再試。');
+            if (c === 403) throw new Error('API 金鑰無效（403）。請至後台設定確認 Gemini API 金鑰。');
+            throw new Error(eb?.error?.message || `HTTP ${stdResp.status}`);
+        }
+        const stdData = await stdResp.json();
+        rawText = stdData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        lt.textContent = `${modelLabel} 辨識完成，解析結果...`;
     }
 
-    if (!rawText) throw new Error('AI 未能返回有效結果，請確認音訊品質或嘗試 Flash 模型。');
-    rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    // 找到第一個 { 開始解析
+    if (!rawText) throw new Error('AI 未能返回有效結果。請確認：1) API 金鑰正確 2) 音訊有聲音內容 3) 嘗試選用 Flash 模型。');
+    rawText = rawText.replace(/```json[\s\S]*?```/g, m => m.slice(7,-3)).replace(/```/g, '').trim();
     const jsonStart = rawText.indexOf('{');
-    if (jsonStart === -1) throw new Error('AI 回傳格式錯誤，請重試。');
+    if (jsonStart === -1) throw new Error(`AI 回傳格式錯誤，無法解析 JSON。原始回應前50字：${rawText.slice(0,50)}`);
     rawText = rawText.slice(jsonStart);
     parsedResult = sanitizeResult(JSON.parse(rawText), langCode);
 }
@@ -2641,15 +2647,21 @@ function avatarColor(e){ return ACOLORS[hashStr(e)%ACOLORS.length]; }
 
 // 檢查是否已登入；未登入則顯示封鎖牆
 function checkAuth() {
-    // 永遠清除任何舊旁路 token（確保每次開頁都需重新登入）
-    localStorage.removeItem('vf_auth_bypass');
+    localStorage.removeItem('vf_auth_bypass'); // 清除舊旁路 token
 
-    const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
-    // ① 已透過 OAuth（Gmail / Facebook）登入 → 直接放行
-    if (u && u.name) { hideAuthGate(); return; }
+    try {
+        const raw = localStorage.getItem('vf_user');
+        if (raw) {
+            const u = JSON.parse(raw);
+            // ① 已透過 OAuth（Gmail / Facebook）登入 → 維持登入狀態
+            if (u && u.name) { hideAuthGate(); return; }
+        }
+    } catch(e) {
+        // vf_user 損壞 → 清除並重新登入
+        localStorage.removeItem('vf_user');
+    }
 
-    // ② 其他所有情況（未登入、訪客、管理員旁路）→ 顯示登入牆
-    // 若 OAuth 尚未設定，登入牆會提示管理員進入後台設定
+    // ② 未登入 → 顯示登入牆（OAuth 未設定時提示管理員入口）
     showAuthGate();
 }
 
