@@ -1131,6 +1131,7 @@ window.onload = () => {
     applyColors(); applySiteInfo(); setupNav();
     setupDrop(); loadKeywords(); setupWYSIWYG();
     renderProjects(); updateUserUI();
+    localStorage.removeItem('vf_auth_bypass'); // 每次開頁強制清除任何舊旁路 token
     checkAuth();
     initFacebookSDK();
     onModelChange();
@@ -2591,24 +2592,15 @@ function avatarColor(e){ return ACOLORS[hashStr(e)%ACOLORS.length]; }
 
 // 檢查是否已登入；未登入則顯示封鎖牆
 function checkAuth() {
+    // 永遠清除任何舊旁路 token（確保每次開頁都需重新登入）
+    localStorage.removeItem('vf_auth_bypass');
+
     const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
-    // ① 已透過 OAuth 登入 → 直接放行
+    // ① 已透過 OAuth（Gmail / Facebook）登入 → 直接放行
     if (u && u.name) { hideAuthGate(); return; }
 
-    // ② OAuth 已設定 → 強制清除舊旁路 token，所有使用者必須以正式帳號登入
-    const oauthConfigured = !!(gs('googleClientId') || gs('facebookAppId'));
-    if (oauthConfigured) {
-        localStorage.removeItem('vf_auth_bypass'); // 主動清除任何舊旁路 token
-        showAuthGate();
-        return;
-    }
-
-    // ③ 尚未設定 OAuth + 管理員已登入（24h 旁路 token）→ 允許使用
-    // 注意：token 在 OAuth 設定完成後由 ② 自動清除，強制改用正式帳號登入
-    const adminBypass = Date.now() < parseInt(localStorage.getItem('vf_auth_bypass') || '0');
-    if (adminBypass) { hideAuthGate(); return; }
-
-    // ④ 其他所有訪客 → 顯示登入牆
+    // ② 其他所有情況（未登入、訪客、管理員旁路）→ 顯示登入牆
+    // 若 OAuth 尚未設定，登入牆會提示管理員進入後台設定
     showAuthGate();
 }
 
@@ -2688,20 +2680,16 @@ function doAuthAdminBypass() {
     const errEl = document.getElementById('agAdminErr');
     if (user === gs('adminUser') && pass === gs('adminPass')) {
         if (errEl) errEl.style.display = 'none';
+        // 無論是否已設定 OAuth，管理員帳號一律僅開啟後台設定，不授予應用存取權
+        // 要使用應用功能，管理員必須以 Gmail / Facebook 正式帳號登入
+        saveAdminSession();
+        document.getElementById('authGate').classList.remove('show');
+        openSettings();
         const oauthConfigured = !!(gs('googleClientId') || gs('facebookAppId'));
         if (oauthConfigured) {
-            // OAuth 已設定 → 緊急設定模式：直接開啟後台設定，完成後回到登入牆
-            saveAdminSession();
-            document.getElementById('authGate').classList.remove('show');
-            openSettings();
-            toast('⚙️ 管理員緊急設定模式。完成設定後請使用 Google / Facebook 正式帳號登入。', 'ok');
+            toast('⚙️ 管理員設定模式。完成設定後，請關閉此頁並以 Google / Facebook 帳號登入。', 'ok');
         } else {
-            // 尚未設定 OAuth → 管理員完整進入（24h token），可正常使用所有功能
-            // 設定 OAuth 後，token 會在 checkAuth() 中自動清除，強制改用正式帳號
-            localStorage.setItem('vf_auth_bypass', String(Date.now() + 86400000));
-            saveAdminSession();
-            hideAuthGate();
-            toast('✅ 管理員模式。您可正常使用所有功能。請至後台設定 → 進階 填入 Google/Facebook Client ID，啟用正式登入。', 'ok');
+            toast('⚙️ 管理員設定模式。請至「進階」填入 Google / Facebook Client ID，之後以正式帳號登入即可使用。', 'ok');
         }
     } else {
         if (errEl) errEl.style.display = 'block';
