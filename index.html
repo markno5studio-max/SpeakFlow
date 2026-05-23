@@ -609,6 +609,16 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     <div id="mediaContainer" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
                         <span style="color:rgba(255,255,255,.15);font-size:12px;">媒體預覽區域</span>
                     </div>
+                    <!-- 重新載入音訊（開啟舊專案時顯示）-->
+                    <div id="reloadAudioZone" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(11,11,15,.88);border-radius:var(--r-lg);z-index:10;">
+                        <i class="fas fa-file-audio" style="font-size:28px;color:var(--primary);"></i>
+                        <div style="font-size:13px;font-weight:700;color:var(--text-primary);">載入音訊以啟用播放</div>
+                        <div style="font-size:11.5px;color:var(--text-secondary);">逐字稿已還原，請重新選擇同一音訊檔</div>
+                        <button class="btn btn-p" style="padding:6px 16px;font-size:12px;" onclick="document.getElementById('editorAudioInput').click()">
+                            <i class="fas fa-folder-open"></i> 選擇音訊/影片
+                        </button>
+                        <input type="file" id="editorAudioInput" accept="audio/*,video/*" style="display:none" onchange="loadEditorAudio(this.files[0])">
+                    </div>
                     <!-- 安全區域 -->
                     <div class="safe-zone sz-tk" id="szTK">
                         <div class="sz-border"></div>
@@ -725,7 +735,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <button class="btn" style="padding:4px 9px;font-size:11.5px;" onclick="doReplaceAll()">全部取代</button>
                     </div>
                 </div>
-                <div class="tr-box" id="transcriptBox" contenteditable="true">
+                <div class="tr-box" id="transcriptBox">
                     <span style="color:var(--text-tertiary);font-style:italic;">完成 AI 轉錄後，逐字稿將顯示於此...</span>
                 </div>
             </div>
@@ -1239,6 +1249,18 @@ window.onload = () => {
     initAllCPW();
     initResizers();
     initTranscriptKeyHandler();
+
+    // ── 編輯器音訊區：拖放重新載入音訊 ──
+    const raz = document.getElementById('reloadAudioZone');
+    if (raz) {
+        raz.addEventListener('dragover', e => { e.preventDefault(); raz.style.border = '2px dashed var(--primary)'; });
+        raz.addEventListener('dragleave', () => { raz.style.border = ''; });
+        raz.addEventListener('drop', e => {
+            e.preventDefault(); raz.style.border = '';
+            const f = e.dataTransfer.files?.[0];
+            if (f && (f.type.startsWith('audio/') || f.type.startsWith('video/'))) loadEditorAudio(f);
+        });
+    }
     // 初始化時間碼格式
     const tcSel = document.getElementById('tcFormatSel');
     if (tcSel) { tcSel.value = tcFormat; document.getElementById('tcFmtBadge').textContent = tcFormat==='8'?'8碼 SMPTE':'9碼 SRT'; }
@@ -1885,6 +1907,10 @@ function pickFile(file) {
     document.getElementById('fileBar').style.display='flex';
     updateStartBtn();
 
+    // 新檔案上傳時隱藏「重新載入音訊」提示
+    const razPF = document.getElementById('reloadAudioZone');
+    if (razPF) razPF.style.display = 'none';
+
     const url=URL.createObjectURL(file);
     const mc=document.getElementById('mediaContainer');
     mc.innerHTML='';
@@ -2085,6 +2111,11 @@ ${twRule}
                     }
                     const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     rawText += part;
+                    // 偵測 MAX_TOKENS：輸出被截斷
+                    const fr = chunk.candidates?.[0]?.finishReason;
+                    if (fr === 'MAX_TOKENS') {
+                        lt.textContent = `⚠ 輸出達到 Token 上限，嘗試回收截斷 JSON...`;
+                    }
                     if (rawText.length > 0) lt.textContent = `${modelLabel} 辨識中，已接收 ${rawText.length} 字元...`;
                 } catch(ex) { if (ex.message && !ex.message.includes('JSON')) throw ex; }
             }
@@ -2114,7 +2145,41 @@ ${twRule}
     const jsonStart = rawText.indexOf('{');
     if (jsonStart === -1) throw new Error(`AI 回傳格式錯誤，無法解析 JSON。原始回應前50字：${rawText.slice(0,50)}`);
     rawText = rawText.slice(jsonStart);
-    parsedResult = sanitizeResult(JSON.parse(rawText), langCode);
+    // ── 嘗試解析 JSON；若被截斷則自動修復 ──
+    parsedResult = sanitizeResult(recoverJSON(rawText), langCode);
+}
+
+// 解析 JSON；若截斷則嘗試多種修復策略
+function recoverJSON(raw) {
+    // 1) 直接解析
+    try { return JSON.parse(raw); } catch {}
+    // 2) 移除最後一個不完整的段落（找最後一個完整的 {...} 再補 ]}）
+    try {
+        const lastFull = raw.lastIndexOf('"}');
+        if (lastFull > 0) {
+            const cut = raw.slice(0, lastFull + 2);
+            // 找 transcript 陣列起始
+            const tIdx = cut.indexOf('"transcript"');
+            if (tIdx >= 0) {
+                return JSON.parse(cut + ']}');
+            }
+        }
+    } catch {}
+    // 3) 補足結尾
+    const suffixes = ['"}]}', '"}],"chapters":[]}', '],"chapters":[]}', ']}'];
+    for (const sfx of suffixes) {
+        try { return JSON.parse(raw + sfx); } catch {}
+    }
+    // 4) 找最後完整物件邊界
+    try {
+        let depth = 0, lastClose = -1;
+        for (let i = 0; i < raw.length; i++) {
+            if (raw[i] === '{') depth++;
+            else if (raw[i] === '}') { depth--; if (depth === 0) lastClose = i; }
+        }
+        if (lastClose > 0) return JSON.parse(raw.slice(0, lastClose + 1));
+    } catch {}
+    throw new Error('AI 回傳 JSON 格式錯誤或嚴重截斷，無法解析。請嘗試：① 縮短音訊 ② 選用 Flash 模型 ③ 重試。');
 }
 
 // 繁簡轉換對照表（簡→繁，針對語音辨識最常混入的簡體字）
@@ -2480,6 +2545,7 @@ function loadProject(id) {
     parsedResult = p.result;
     audioDuration = p.duration || 0;
     currentFile = null;
+    currentMedia = null;
     currentProjectId = p.id;
     currentProjectName = p.name || '未命名專案';
     document.getElementById('fileBar').style.display = 'none';
@@ -2487,9 +2553,62 @@ function loadProject(id) {
     const trIn = document.getElementById('trNameInput');
     if (trIn) trIn.value = currentProjectName;
     if (fatKeywords.length > 0) document.getElementById('enableFatHighlight').checked = true;
+
+    // 清空舊媒體並顯示「重新載入音訊」提示
+    const mc = document.getElementById('mediaContainer');
+    if (mc) mc.innerHTML = '<span style="color:rgba(255,255,255,.15);font-size:12px;">媒體預覽區域</span>';
+    const raz = document.getElementById('reloadAudioZone');
+    if (raz) raz.style.display = 'flex';
+    waveformData = null; stopWaveAnim();
+    const ww = document.getElementById('waveWrap');
+    if (ww) ww.style.display = 'none';
+    const pb = document.querySelector('.play-bar');
+    if (pb) pb.classList.remove('has-wave');
+
+    _undoStack = []; // 切換專案時清空還原堆疊
     renderResults();
     goSection('subtitleEditor');
-    toast(`已載入：${p.name}`, 'ok');
+    toast(`已載入：${p.name}（請重新選擇音訊以啟用播放）`, 'ok');
+}
+
+// ── 編輯器中重新載入音訊（不觸發重新轉錄）──
+function loadEditorAudio(file) {
+    if (!file) return;
+    currentFile = file;
+    const raz = document.getElementById('reloadAudioZone');
+    if (raz) raz.style.display = 'none';
+    const url = URL.createObjectURL(file);
+    const mc  = document.getElementById('mediaContainer');
+    mc.innerHTML = '';
+    let el;
+    if (file.type.startsWith('video/')) {
+        el = document.createElement('video');
+        el.controls = true;
+        el.style.cssText = 'max-width:100%;max-height:100%;';
+    } else {
+        el = document.createElement('audio');
+        el.controls = true;
+        el.style.cssText = 'width:88%;margin:auto;';
+    }
+    el.src = url;
+    el.onloadedmetadata = () => { audioDuration = el.duration; initSeekBar(el); };
+    el.ontimeupdate = () => { updateLiveSub(el.currentTime); updateSeekBar(el); };
+    el.onended = () => {
+        const pi = document.getElementById('playIcon');
+        if (pi) pi.className = 'fas fa-play';
+        if (_lastPlayIdx >= 0) {
+            const old = document.querySelector(`.tr-line[data-i="${_lastPlayIdx}"]`);
+            if (old) old.classList.remove('playing');
+            _lastPlayIdx = -1;
+        }
+    };
+    currentMedia = el;
+    mc.appendChild(el);
+    waveformData = null; stopWaveAnim();
+    document.getElementById('waveWrap').style.display = 'none';
+    document.querySelector('.play-bar').classList.remove('has-wave');
+    buildWaveform(file);
+    toast('音訊已載入，可開始播放與同步編輯', 'ok');
 }
 
 function addCategory() {
@@ -3478,9 +3597,22 @@ function t2s(str){ try{ const p=str.split(':'),sp=p[2].split(','); return +p[0]*
 function srtToSecs(str) {
     if (!str) return 0;
     try {
-        const [hms, ms] = str.split(',');
-        const [h,m,s] = hms.split(':');
-        return parseInt(h)*3600 + parseInt(m)*60 + parseInt(s) + parseInt(ms||0)/1000;
+        const norm = String(str).trim();
+        // 支援逗號（SRT）或句點（VTT/Gemini 常見）作為毫秒分隔
+        // 找最後一個逗號或最後一個冒號後的句點
+        const commaIdx = norm.lastIndexOf(',');
+        const colonIdx = norm.lastIndexOf(':');
+        const dotAfterColon = norm.indexOf('.', colonIdx);
+        const sepIdx = commaIdx >= 0 ? commaIdx : (dotAfterColon >= 0 ? dotAfterColon : -1);
+        const hmsStr = sepIdx >= 0 ? norm.slice(0, sepIdx) : norm;
+        const msNum  = sepIdx >= 0 ? (parseInt(norm.slice(sepIdx + 1)) || 0) : 0;
+        const parts  = hmsStr.split(':');
+        // 支援 H:M:S、M:S 或純 S
+        const h = (parseInt(parts[parts.length - 3]) || 0);
+        const m = (parseInt(parts[parts.length - 2]) || 0);
+        const s = (parseInt(parts[parts.length - 1]) || 0);
+        const result = h * 3600 + m * 60 + s + msNum / 1000;
+        return isFinite(result) && result >= 0 ? result : 0;
     } catch { return 0; }
 }
 function secsToSRT(t) {
