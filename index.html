@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <link id="gFontsLink" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Noto+Serif+TC:wght@400;700&family=Nunito:wght@400;700&display=swap">
 <style>
 :root {
@@ -143,7 +144,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tr-box{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;min-height:240px;font-size:13.5px;white-space:pre-wrap;outline:none;transition:var(--t);line-height:1.9;}
 .tr-box:focus{border-color:var(--border-focus);}
 mark.fh{background:rgba(var(--primary-rgb),.22);color:var(--text-primary);padding:0 3px;border-radius:3px;font-weight:800;border-bottom:2px solid var(--primary);}
-.sp-tag{display:inline-flex;align-items:center;padding:1px 6px;background:rgba(74,124,247,.14);color:#7aaaf8;border-radius:4px;font-size:10px;font-weight:800;margin-right:6px;}
+.sp-tag{display:inline-flex;align-items:center;padding:1px 6px;background:rgba(74,124,247,.14);color:#7aaaf8;border-radius:4px;font-size:10px;font-weight:800;margin-right:6px;cursor:pointer;transition:var(--t);}
+
+/* ─── SPEAKER PANEL ─── */
+.sp-panel{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:11px 14px;margin-bottom:12px;display:none;}
+.sp-panel-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;font-size:12px;font-weight:700;color:var(--text-secondary);}
+.sp-edit-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.sp-color-btn{width:26px;height:26px;border-radius:50%;border:2px solid rgba(255,255,255,.15);cursor:pointer;flex-shrink:0;position:relative;overflow:hidden;}
+.sp-color-btn input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0;}
+.sp-name-in{flex:1;padding:5px 9px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-primary);font-size:12.5px;font-weight:600;}
+.sp-orig{font-size:10px;color:var(--text-tertiary);white-space:nowrap;}
+
+/* ─── PENDING APPROVAL ─── */
+.ag-pending{margin-top:12px;padding:14px;background:rgba(74,124,247,.07);border:1px solid rgba(74,124,247,.2);border-radius:var(--r-md);display:none;}
+.ag-pending-ttl{font-size:13px;font-weight:700;margin-bottom:6px;color:#7aaaf8;}
+.ag-pending-sub{font-size:11.5px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;}
+.ag-pending .fi{margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;}
+
+/* ─── ACCESS CONTROL SETTINGS ─── */
+.ac-toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:11px;}
+.ac-toggle-lbl{font-size:13px;font-weight:700;}
+.ac-toggle{position:relative;width:40px;height:22px;flex-shrink:0;}
+.ac-toggle input{opacity:0;width:0;height:0;}
+.ac-toggle-slider{position:absolute;inset:0;background:rgba(255,255,255,.1);border-radius:11px;cursor:pointer;transition:.3s;}
+.ac-toggle-slider:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.3s;}
+.ac-toggle input:checked + .ac-toggle-slider{background:var(--primary);}
+.ac-toggle input:checked + .ac-toggle-slider:before{transform:translateX(18px);}
+.ac-pending-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg-elevated);border-radius:var(--r-sm);margin-bottom:5px;font-size:12.5px;}
+.ac-pending-info{flex:1;min-width:0;}
+.ac-pending-name{font-weight:700;color:var(--text-primary);}
+.ac-pending-email{font-size:11px;color:var(--text-secondary);}
+.ac-approve-btn{padding:3px 10px;font-size:11.5px;background:rgba(61,212,154,.12);border:1px solid rgba(61,212,154,.3);color:var(--accent-green);border-radius:var(--r-sm);cursor:pointer;transition:var(--t);}
+.ac-approve-btn:hover{background:rgba(61,212,154,.22);}
+.ac-reject-btn{padding:3px 10px;font-size:11.5px;background:rgba(240,96,96,.1);border:1px solid rgba(240,96,96,.25);color:var(--accent-red);border-radius:var(--r-sm);cursor:pointer;transition:var(--t);margin-left:4px;}
 .ts-tag{color:var(--primary);font-size:10px;font-weight:700;margin-right:6px;opacity:.75;}
 .ch-list{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:5px;max-height:200px;overflow-y:auto;}
 .chi{display:flex;gap:9px;padding:6px 8px;border-radius:4px;transition:var(--t);}
@@ -406,6 +439,17 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             <button class="btn btn-p btn-full" style="margin-top:4px;" onclick="doAuthAdminBypass()">
                 <i class="fas fa-right-to-bracket"></i> 以管理員身份進入
             </button>
+        </div>
+
+        <!-- 待審核提示（access control 啟用時顯示）-->
+        <div class="ag-pending" id="agPending">
+            <div class="ag-pending-ttl"><i class="fas fa-clock" style="margin-right:5px;"></i>帳號待審核</div>
+            <div class="ag-pending-sub" id="agPendingMsg">您的帳號需要管理者審核後才能使用。<br>系統已通知管理者，請耐心等候，或向管理者索取邀請碼。</div>
+            <label class="fl" style="font-size:10.5px;">邀請碼（6 位）</label>
+            <input type="text" class="fi" id="agInviteInput" placeholder="輸入邀請碼..." maxlength="8" autocomplete="off" style="text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">
+            <div class="err-msg" id="agInviteErr" style="display:none;">邀請碼無效或已過期。</div>
+            <button class="btn btn-p btn-full" onclick="verifyInviteCode()"><i class="fas fa-key"></i> 驗證邀請碼</button>
+            <button class="btn btn-full" style="margin-top:6px;font-size:11.5px;" onclick="retryLogin()"><i class="fas fa-arrow-left"></i> 返回重新登入</button>
         </div>
 
         <p style="font-size:10.5px;color:var(--text-tertiary);margin-top:12px;line-height:1.7;">
@@ -735,6 +779,15 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <button class="btn" style="padding:4px 9px;font-size:11.5px;" onclick="doReplaceAll()">全部取代</button>
                     </div>
                 </div>
+                <!-- 說話者辨識面板 -->
+                <div class="sp-panel" id="speakerPanel">
+                    <div class="sp-panel-hd">
+                        <span><i class="fas fa-users" style="margin-right:5px;color:var(--primary);"></i>說話者設定</span>
+                        <span style="font-size:10px;font-weight:400;color:var(--text-tertiary);">點擊色塊更換顏色・編輯名稱即時生效</span>
+                    </div>
+                    <div id="speakerList"></div>
+                </div>
+
                 <div class="tr-box" id="transcriptBox">
                     <span style="color:var(--text-tertiary);font-style:italic;">完成 AI 轉錄後，逐字稿將顯示於此...</span>
                 </div>
@@ -846,6 +899,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             <button class="tab-btn active" onclick="switchTab('general')">一般</button>
             <button class="tab-btn" onclick="switchTab('colors')">色彩</button>
             <button class="tab-btn" onclick="switchTab('advanced')">進階</button>
+            <button class="tab-btn" onclick="switchTab('access')">訪客管理</button>
         </div>
         <div class="s-scroll">
 
@@ -1086,6 +1140,61 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 </div>
             </div>
 
+            <!-- ── 訪客管理 ── -->
+            <div class="tab-pane" id="tab-access">
+                <div class="s-sec">
+                    <div class="s-lbl">訪客登入管制</div>
+                    <div class="ac-toggle-row">
+                        <div>
+                            <div class="ac-toggle-lbl">啟用登入審核</div>
+                            <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">開啟後，新使用者需通過審核才能存取</div>
+                        </div>
+                        <label class="ac-toggle">
+                            <input type="checkbox" id="sAccessControl" onchange="renderPendingList()">
+                            <span class="ac-toggle-slider"></span>
+                        </label>
+                    </div>
+                    <label class="fl">管理者通知信箱</label>
+                    <input type="email" class="fi" id="sAdminEmail" placeholder="admin@example.com" style="margin-bottom:11px;">
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">EmailJS 設定（免費電郵通知服務）</div>
+                    <p style="font-size:11px;color:var(--text-tertiary);line-height:1.6;margin-bottom:10px;">
+                        前往 <strong>emailjs.com</strong> 免費申請帳號 → 建立 Email Service（Gmail/Outlook 均可）→ 建立 Email Template（模板變數：<code>to_email, user_name, user_email, invite_code, site_name, site_url</code>）→ 複製以下三組 ID 填入。
+                    </p>
+                    <div class="fg">
+                        <div><label class="fl">Service ID</label><input type="text" class="fi" id="sEjsService" placeholder="service_xxxxxxx"></div>
+                        <div><label class="fl">Template ID</label><input type="text" class="fi" id="sEjsTemplate" placeholder="template_xxxxxxx"></div>
+                    </div>
+                    <div style="margin-top:8px;"><label class="fl">Public Key</label><input type="text" class="fi" id="sEjsKey" placeholder="XXXXXXXXXXXXXXXXX"></div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">已核准名單 <span style="font-size:10px;font-weight:400;color:var(--text-tertiary);">（每行一個 Email，儲存後立即生效）</span></div>
+                    <textarea class="fi" id="sApprovedEmails" rows="5" placeholder="user1@gmail.com&#10;user2@gmail.com" style="resize:vertical;font-family:monospace;font-size:12px;"></textarea>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">產生邀請碼</div>
+                    <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px;">為特定使用者產生一次性邀請碼（7 天有效），直接傳給對方輸入即可完成審核。</p>
+                    <div style="display:flex;gap:7px;">
+                        <input type="email" class="fi" id="sInviteEmail" placeholder="user@example.com" style="flex:1;">
+                        <button class="btn btn-p" style="white-space:nowrap;padding:8px 14px;" onclick="genAndShowInvite()"><i class="fas fa-key"></i> 產生</button>
+                    </div>
+                    <div id="sInviteResult" style="display:none;margin-top:10px;padding:10px 14px;background:rgba(61,212,154,.08);border:1px solid rgba(61,212,154,.25);border-radius:var(--r-md);font-family:monospace;">
+                        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">邀請碼（7 天內有效）</div>
+                        <div id="sInviteCode" style="font-size:22px;font-weight:800;letter-spacing:4px;color:var(--accent-green);"></div>
+                        <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">請將此碼傳給用戶，讓對方在登入後的「邀請碼」欄位輸入。</div>
+                    </div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">待審核申請</div>
+                    <div id="sPendingList"><span style="color:var(--text-tertiary);font-size:12px;">（尚無待審核申請）</span></div>
+                </div>
+            </div>
+
         </div><!-- s-scroll -->
         <div style="display:flex;gap:8px;margin-top:16px;">
             <button class="btn btn-p btn-full" onclick="saveSettings()">
@@ -1163,6 +1272,9 @@ let _undoStack = []; // 逐字稿 Cmd+Z 還原堆疊
 let localModelReady=false, localModelLoading=false, transcriber=null;
 let currentWhisperKey=null, pendingUser=null, currentMedia=null;
 let waveformData=null, waveAnimReq=null;
+// ── 說話者名稱對照 ──
+let speakerMap = {}; // { 'Speaker A': { name:'主持人', color:'#e74c3c' } }
+const SP_DEFAULT_COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
 // ── 麥克風錄音 State ──
 let micStream=null, micContext=null, micProcessor=null, micChunks=[], micRecording=false;
 // ── 尋找/取代 State ──
@@ -1192,7 +1304,9 @@ let tcFormat = localStorage.getItem('vf_tc_format') || '8'; // '8'=SMPTE HH:MM:S
 window.onload = () => {
     applyColors(); applySiteInfo(); setupNav();
     setupDrop(); loadKeywords(); loadReplacements(); setupWYSIWYG();
+    loadSpeakerMap(); // 說話者對照
     renderProjects(); updateUserUI();
+    handleGrantParam(); // 處理 ?grant= 邀請連結
     checkAuth(); // 完整驗證（包含 hideAuthGate / showAuthGate）
     initFacebookSDK();
     onModelChange();
@@ -1249,6 +1363,7 @@ window.onload = () => {
     initAllCPW();
     initResizers();
     initTranscriptKeyHandler();
+    initClickToSeek(); // 點擊逐字稿 → 移動播放游標
 
     // ── 編輯器音訊區：拖放重新載入音訊 ──
     const raz = document.getElementById('reloadAudioZone');
@@ -2339,11 +2454,17 @@ function renderResults() {
                 text=text.replace(re,'<mark class="fh">$&</mark>');
             });
         }
-        const sp=(line.speaker&&showDiar)?`<span class="sp-tag">${line.speaker}</span> `:'';
+        let spHtml = '';
+        if (line.speaker && showDiar) {
+            const { name: spName, color: spColor } = getSpeakerDisplay(line.speaker);
+            const spStyle = spColor ? `background:${spColor}22;color:${spColor};border-color:${spColor}44;` : '';
+            spHtml = `<span class="sp-tag" data-sp="${esc(line.speaker)}" style="${spStyle}">${esc(spName)}</span> `;
+        }
         const tcStr=(line.start&&showTime)?`<span class="tr-tc" data-i="${i}" style="font-size:${Math.max(9,curSize*0.72)}px;">${formatTC(line.start)}</span>`:'';
-        html+=`<div class="tr-line" data-i="${i}">${tcStr}${sp}<span class="tr-txt" contenteditable="true" data-i="${i}">${text}</span></div>`;
+        html+=`<div class="tr-line" data-i="${i}">${tcStr}${spHtml}<span class="tr-txt" contenteditable="true" data-i="${i}">${text}</span></div>`;
     });
     tb.innerHTML=html;
+    renderSpeakerPanel(); // 同步更新說話者面板
     document.getElementById('statsPanel').style.display='grid';
     document.getElementById('statSegments').textContent=parsedResult.transcript.length;
     document.getElementById('statWordCount').textContent=words.toLocaleString();
@@ -3001,8 +3122,38 @@ function doFacebookLogin() {
     }, { scope: 'public_profile,email' });
 }
 
-// ── 統一 OAuth 登入完成處理 ──
+// ── 統一 OAuth 登入完成處理（訪客管制閘門）──
 function doOAuthLogin(userData) {
+    if (gs('accessControl') === 'true') {
+        const email = (userData.email || '').trim().toLowerCase();
+        const approved = (gs('approvedEmails') || '')
+            .split('\n').map(e => e.trim().toLowerCase()).filter(Boolean);
+        if (approved.includes(email)) {
+            // 已核准 → 直接登入
+            doOAuthLoginDirect(userData);
+        } else {
+            // 未核准 → 顯示等候審核畫面並通知管理者
+            pendingUser = userData;
+            addPending(userData);
+            const oauthBlock = document.getElementById('agOAuthBlock');
+            const pendingDiv = document.getElementById('agPending');
+            const errDiv     = document.getElementById('agErr');
+            if (oauthBlock) oauthBlock.style.display = 'none';
+            if (errDiv)     errDiv.style.display     = 'none';
+            if (pendingDiv) pendingDiv.style.display  = 'block';
+            // 設定待審核訊息（顯示使用者名稱）
+            const msgEl = document.getElementById('agPendingMsg');
+            if (msgEl) msgEl.innerHTML = `<strong>${esc(userData.name)}</strong>（${esc(userData.email)}）<br>您的帳號需要管理者審核後才能使用。<br>系統已通知管理者，請耐心等候，或向管理者索取邀請碼。`;
+            sendApprovalEmail(userData, makeInviteCode(userData.email));
+        }
+    } else {
+        // 未啟用訪客管制 → 直接登入
+        doOAuthLoginDirect(userData);
+    }
+}
+
+// ── 實際執行登入（寫入 localStorage、更新 UI）──
+function doOAuthLoginDirect(userData) {
     const stored = {
         name: userData.name,
         email: userData.email,
@@ -3013,7 +3164,8 @@ function doOAuthLogin(userData) {
     localStorage.setItem('vf_user', JSON.stringify(stored));
     updateUserUI();
     hideAuthGate();
-    document.getElementById('agErr').style.display = 'none';
+    const errDiv = document.getElementById('agErr');
+    if (errDiv) errDiv.style.display = 'none';
     toast(`歡迎，${stored.name}！（${stored.provider} 帳號）`, 'ok');
 }
 
@@ -3132,6 +3284,20 @@ function openSettings() {
     document.getElementById('sModelSize').value=gs('modelSize');
     const stcf = document.getElementById('sTCFormat');
     if (stcf) stcf.value = localStorage.getItem('vf_tc_format') || '8';
+    // ── 訪客管理 ──
+    const acEl = document.getElementById('sAccessControl');
+    if (acEl) acEl.checked = gs('accessControl') === 'true';
+    const aeEl = document.getElementById('sAdminEmail');
+    if (aeEl) aeEl.value = gs('adminEmail') || '';
+    const ejsS = document.getElementById('sEjsService');
+    if (ejsS) ejsS.value = gs('ejsService') || '';
+    const ejsT = document.getElementById('sEjsTemplate');
+    if (ejsT) ejsT.value = gs('ejsTemplate') || '';
+    const ejsK = document.getElementById('sEjsKey');
+    if (ejsK) ejsK.value = gs('ejsKey') || '';
+    const apEl = document.getElementById('sApprovedEmails');
+    if (apEl) apEl.value = gs('approvedEmails') || '';
+    renderPendingList();
     // sync all CPWs with saved values
     document.querySelectorAll('.cpw[data-key]').forEach(cpw=>syncCPW(cpw, gs(cpw.dataset.key)));
     switchTab('general');
@@ -3140,7 +3306,7 @@ function openSettings() {
 
 function switchTab(id) {
     document.querySelectorAll('.tab-btn').forEach((b,i)=>{
-        const ids=['general','colors','advanced'];
+        const ids=['general','colors','advanced','access'];
         b.classList.toggle('active',ids[i]===id);
     });
     document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
@@ -3178,6 +3344,19 @@ function saveSettings() {
         const badge = document.getElementById('tcFmtBadge');
         if (badge) badge.textContent = tcFormat==='8'?'8碼 SMPTE':'9碼 SRT';
     }
+    // 訪客管理
+    const acEl = document.getElementById('sAccessControl');
+    if (acEl) ss('accessControl', acEl.checked ? 'true' : 'false');
+    const aeEl = document.getElementById('sAdminEmail');
+    if (aeEl) ss('adminEmail', aeEl.value.trim());
+    const ejsS = document.getElementById('sEjsService');
+    if (ejsS) ss('ejsService', ejsS.value.trim());
+    const ejsT = document.getElementById('sEjsTemplate');
+    if (ejsT) ss('ejsTemplate', ejsT.value.trim());
+    const ejsK = document.getElementById('sEjsKey');
+    if (ejsK) ss('ejsKey', ejsK.value.trim());
+    const apEl = document.getElementById('sApprovedEmails');
+    if (apEl) ss('approvedEmails', apEl.value);
     // save all color CPWs
     document.querySelectorAll('.cpw[data-key]').forEach(cpw=>{
         const hex=cpw.querySelector('.cpw-native').value;
@@ -3511,9 +3690,14 @@ function renderResultsWithFind(q) {
                 return `<mark class="fnd${isCur?' cur':''}">${m}</mark>`;
             });
         }
-        const sp = (line.speaker&&showDiar) ? `<span class="sp-tag">${line.speaker}</span>` : '';
+        let spFind = '';
+        if (line.speaker && showDiar) {
+            const { name: spName, color: spColor } = getSpeakerDisplay(line.speaker);
+            const spStyle = spColor ? `background:${spColor}22;color:${spColor};border-color:${spColor}44;` : '';
+            spFind = `<span class="sp-tag" data-sp="${esc(line.speaker)}" style="${spStyle}">${esc(spName)}</span>`;
+        }
         const ts = (line.start&&showTime) ? `<span class="ts-tag">[${line.start.split(',')[0]}]</span>` : '';
-        html += `<div style="margin-bottom:8px;line-height:1.9;" data-i="${li}">${ts}${sp}<span>${text}</span></div>`;
+        html += `<div style="margin-bottom:8px;line-height:1.9;" data-i="${li}">${ts}${spFind}<span>${text}</span></div>`;
     });
     document.getElementById('transcriptBox').innerHTML = html;
 }
@@ -3839,23 +4023,30 @@ function initTranscriptKeyHandler() {
             return;
         }
 
-        // ── Backspace：游標在 .tr-txt 最前端時，阻止跨欄位合併 ──
+        // ── Backspace：游標在 .tr-txt 最前端時，合併至上一段 ──
         if (e.key === 'Backspace' && span) {
             const caretPos = getCaretCharOffset(span);
             if (caretPos === 0) {
                 e.preventDefault(); // 阻止刪入相鄰的時間碼 span
                 const idx = parseInt(span.dataset.i);
                 if (!isNaN(idx) && idx > 0) {
-                    const prevSpan = document.querySelector(`.tr-txt[data-i="${idx - 1}"]`);
-                    if (prevSpan) {
-                        prevSpan.focus();
-                        const r = document.createRange();
-                        r.selectNodeContents(prevSpan);
-                        r.collapse(false);
-                        const sel = window.getSelection();
-                        sel.removeAllRanges();
-                        sel.addRange(r);
-                    }
+                    pushUndo(); // 儲存快照供 Cmd+Z 還原
+                    const prevSeg = parsedResult.transcript[idx - 1];
+                    const currSeg = parsedResult.transcript[idx];
+                    const prevTextLen = (prevSeg.text || '').length;
+                    // 合併：上一段文字 + 當前段文字；時間碼保留上一段的 start、當前段的 end
+                    prevSeg.text = (prevSeg.text || '') + (currSeg.text || '');
+                    prevSeg.end  = currSeg.end || prevSeg.end;
+                    parsedResult.transcript.splice(idx, 1);
+                    renderResults();
+                    // 合併後將游標放在接合點（原上一段文字末端）
+                    setTimeout(() => {
+                        const prevSpan = document.querySelector(`.tr-txt[data-i="${idx - 1}"]`);
+                        if (prevSpan) {
+                            prevSpan.focus();
+                            placeCaretAtOffset(prevSpan, prevTextLen);
+                        }
+                    }, 40);
                 }
             }
         }
@@ -4191,6 +4382,320 @@ function popUndo() {
     parsedResult.transcript = _undoStack.pop();
     renderResults();
     toast('↩ 已還原', 'ok');
+}
+
+// ══════════════════════════════════════════
+// 說話者名稱 & 顏色管理
+// ══════════════════════════════════════════
+function loadSpeakerMap() {
+    try { speakerMap = JSON.parse(localStorage.getItem('vf_speaker_map') || '{}'); } catch { speakerMap = {}; }
+}
+function saveSpeakerMap() {
+    localStorage.setItem('vf_speaker_map', JSON.stringify(speakerMap));
+}
+
+function renderSpeakerPanel() {
+    if (!parsedResult?.transcript) { document.getElementById('speakerPanel').style.display = 'none'; return; }
+    const speakers = [...new Set(parsedResult.transcript.map(s => s.speaker).filter(Boolean))];
+    const panel = document.getElementById('speakerPanel');
+    const list  = document.getElementById('speakerList');
+    if (!speakers.length || !document.getElementById('enableDiarization').checked) {
+        panel.style.display = 'none'; return;
+    }
+    panel.style.display = 'block';
+    // 初始化未設定的說話者
+    speakers.forEach((sp, i) => {
+        if (!speakerMap[sp]) {
+            speakerMap[sp] = { name: sp, color: SP_DEFAULT_COLORS[i % SP_DEFAULT_COLORS.length] };
+        }
+    });
+    saveSpeakerMap();
+    list.innerHTML = speakers.map(sp => {
+        const sm = speakerMap[sp];
+        return `<div class="sp-edit-row">
+            <div class="sp-color-btn" style="background:${sm.color};" title="點擊更換顏色">
+                <input type="color" value="${sm.color}" oninput="updateSpeakerColor('${esc(sp)}',this.value)" title="更換顏色">
+            </div>
+            <input class="sp-name-in fi" type="text" value="${esc(sm.name)}" placeholder="${esc(sp)}"
+                oninput="updateSpeakerName('${esc(sp)}',this.value)" title="自訂說話者名稱">
+            <span class="sp-orig">${esc(sp)}</span>
+        </div>`;
+    }).join('');
+}
+
+function updateSpeakerName(spKey, name) {
+    if (!speakerMap[spKey]) speakerMap[spKey] = { name: spKey, color: '#7aaaf8' };
+    speakerMap[spKey].name = name;
+    saveSpeakerMap();
+    // 即時更新逐字稿標籤（不全重渲染，保留鍵盤焦點與游標位置）
+    document.querySelectorAll('.sp-tag').forEach(el => {
+        if (el.dataset.sp === spKey) el.textContent = name || spKey;
+    });
+}
+function updateSpeakerColor(spKey, color) {
+    if (!speakerMap[spKey]) speakerMap[spKey] = { name: spKey, color };
+    speakerMap[spKey].color = color;
+    saveSpeakerMap();
+    // 即時更新說話者標籤顏色（不全重渲染，效能更好）
+    document.querySelectorAll('.sp-tag').forEach(el => {
+        if (el.dataset.sp === spKey) {
+            el.style.background = color + '22';
+            el.style.color = color;
+            el.style.borderColor = color + '44';
+        }
+    });
+    // 更新色塊
+    document.querySelectorAll('.sp-edit-row').forEach(row => {
+        const orig = row.querySelector('.sp-orig');
+        if (orig && orig.textContent === spKey) {
+            const btn = row.querySelector('.sp-color-btn');
+            if (btn) btn.style.background = color;
+        }
+    });
+}
+
+function getSpeakerDisplay(sp) {
+    if (!sp) return { name: '', color: '' };
+    const sm = speakerMap[sp] || {};
+    return { name: sm.name || sp, color: sm.color || '' };
+}
+
+// ══════════════════════════════════════════
+// 點擊逐字稿 → 移動波形播放位置
+// ══════════════════════════════════════════
+function initClickToSeek() {
+    const tb = document.getElementById('transcriptBox');
+    if (!tb) return;
+    tb.addEventListener('mousedown', function(e) {
+        if (!currentMedia || !parsedResult?.transcript) return;
+        // 若點擊目標是 .tr-txt（文字可編輯區），仍然移動播放位置
+        const line = e.target.closest('.tr-line');
+        if (!line) return;
+        const idx = parseInt(line.dataset.i);
+        if (isNaN(idx) || !parsedResult.transcript[idx]) return;
+        const t = srtToSecs(parsedResult.transcript[idx].start);
+        if (t >= 0) {
+            currentMedia.currentTime = t;
+            updateSeekBar(currentMedia);
+        }
+    });
+}
+
+// ══════════════════════════════════════════
+// 說話者名稱合併至 placeCaretAtOffset
+// ══════════════════════════════════════════
+function placeCaretAtOffset(el, offset) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    let currentOff = 0;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+        const len = node.length;
+        if (currentOff + len >= offset) {
+            const range = document.createRange();
+            range.setStart(node, Math.min(offset - currentOff, len));
+            range.collapse(true);
+            sel.addRange(range);
+            return;
+        }
+        currentOff += len;
+    }
+    // fallback: 移至末端
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.addRange(range);
+}
+
+// ══════════════════════════════════════════
+// 訪客管理：邀請碼 & 審核
+// ══════════════════════════════════════════
+
+// 簡易哈希（不依賴 SubtleCrypto，純同步，結合管理員密碼）
+function spHash(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+    return (h >>> 0).toString(36).toUpperCase();
+}
+
+// 產生邀請碼（7 天有效，每天不同）
+function makeInviteCode(email) {
+    const secret = gs('adminPass') || 'vf_secret';
+    const day = Math.floor(Date.now() / 86400000);
+    const window7 = Math.floor(day / 7); // 7 天週期
+    return spHash(email.toLowerCase() + secret + window7).slice(0, 6);
+}
+
+// 驗證邀請碼（接受當前及上一個 7 天週期）
+function checkInviteCode(email, code) {
+    const secret = gs('adminPass') || 'vf_secret';
+    const day = Math.floor(Date.now() / 86400000);
+    const w = Math.floor(day / 7);
+    for (const offset of [0, -1]) {
+        if (spHash(email.toLowerCase() + secret + (w + offset)).slice(0, 6) === code.toUpperCase()) return true;
+    }
+    return false;
+}
+
+// 驗證邀請碼（用於登入牆輸入框）
+function verifyInviteCode() {
+    const code = (document.getElementById('agInviteInput')?.value || '').trim().toUpperCase();
+    const errEl = document.getElementById('agInviteErr');
+    if (!pendingUser) { showAgErr('請先登入帳號再驗證邀請碼。'); return; }
+    if (!code || code.length < 4) { if (errEl) errEl.style.display = 'block'; return; }
+    if (checkInviteCode(pendingUser.email, code)) {
+        if (errEl) errEl.style.display = 'none';
+        // 邀請碼有效 → 加入已核准名單並登入
+        let approved = (gs('approvedEmails') || '').split('\n').map(e => e.trim()).filter(Boolean);
+        if (!approved.includes(pendingUser.email.toLowerCase())) {
+            approved.push(pendingUser.email.toLowerCase());
+            ss('approvedEmails', approved.join('\n'));
+        }
+        // 將此申請從 pending 移除
+        removePending(pendingUser.email);
+        completePendingLogin();
+    } else {
+        if (errEl) errEl.style.display = 'block';
+    }
+}
+
+// 返回重新登入（清除 pending 狀態）
+function retryLogin() {
+    pendingUser = null;
+    document.getElementById('agPending').style.display = 'none';
+    document.getElementById('agOAuthBlock').style.display = '';
+    document.getElementById('agErr').style.display = 'none';
+    const ip = document.getElementById('agInviteInput');
+    if (ip) ip.value = '';
+}
+
+// 完成 pending user 的正式登入
+function completePendingLogin() {
+    if (!pendingUser) return;
+    doOAuthLoginDirect(pendingUser);
+    pendingUser = null;
+    document.getElementById('agPending').style.display = 'none';
+}
+
+// 產生並顯示邀請碼（在後台設定中使用）
+function genAndShowInvite() {
+    const email = (document.getElementById('sInviteEmail')?.value || '').trim().toLowerCase();
+    if (!email || !email.includes('@')) { toast('請輸入有效的電郵地址', 'err'); return; }
+    const code = makeInviteCode(email);
+    const res = document.getElementById('sInviteResult');
+    const codeEl = document.getElementById('sInviteCode');
+    if (res) res.style.display = 'block';
+    if (codeEl) codeEl.textContent = code;
+    toast(`邀請碼已產生：${code}`, 'ok');
+}
+
+// 取得 pending 使用者清單
+function getPendingList() {
+    try { return JSON.parse(localStorage.getItem('vf_pending_users') || '[]'); } catch { return []; }
+}
+function savePendingList(list) { localStorage.setItem('vf_pending_users', JSON.stringify(list)); }
+
+function addPending(userData) {
+    const list = getPendingList();
+    if (!list.find(u => u.email === userData.email)) {
+        list.unshift({ name: userData.name, email: userData.email, provider: userData.provider, time: new Date().toISOString() });
+        savePendingList(list);
+    }
+}
+function removePending(email) {
+    savePendingList(getPendingList().filter(u => u.email !== email));
+}
+
+function renderPendingList() {
+    const container = document.getElementById('sPendingList');
+    if (!container) return;
+    const list = getPendingList();
+    if (!list.length) {
+        container.innerHTML = '<span style="color:var(--text-tertiary);font-size:12px;">（尚無待審核申請）</span>';
+        return;
+    }
+    container.innerHTML = list.map((u, i) => {
+        const code = makeInviteCode(u.email);
+        return `<div class="ac-pending-row">
+            <div class="ac-pending-info">
+                <div class="ac-pending-name">${esc(u.name)} <span style="font-size:10px;color:var(--text-tertiary);">${esc(u.provider||'')}</span></div>
+                <div class="ac-pending-email">${esc(u.email)} · ${new Date(u.time).toLocaleDateString('zh-TW')}</div>
+                <div style="font-size:10.5px;color:var(--accent-green);margin-top:2px;">邀請碼：<strong style="letter-spacing:2px;">${code}</strong></div>
+            </div>
+            <button class="ac-approve-btn" onclick="approveUser('${esc(u.email)}',${i})"><i class="fas fa-check"></i> 核准</button>
+            <button class="ac-reject-btn" onclick="rejectUser(${i})"><i class="fas fa-times"></i></button>
+        </div>`;
+    }).join('');
+}
+
+function approveUser(email, idx) {
+    let approved = (gs('approvedEmails') || '').split('\n').map(e => e.trim()).filter(Boolean);
+    if (!approved.includes(email.toLowerCase())) {
+        approved.push(email.toLowerCase());
+        ss('approvedEmails', approved.join('\n'));
+        const apEl = document.getElementById('sApprovedEmails');
+        if (apEl) apEl.value = approved.join('\n');
+    }
+    const list = getPendingList();
+    list.splice(idx, 1);
+    savePendingList(list);
+    renderPendingList();
+    toast(`已核准：${email}`, 'ok');
+}
+
+function rejectUser(idx) {
+    const list = getPendingList();
+    if (!confirm(`拒絕「${list[idx]?.name}（${list[idx]?.email}）」的申請？`)) return;
+    list.splice(idx, 1);
+    savePendingList(list);
+    renderPendingList();
+    toast('已拒絕申請', 'ok');
+}
+
+// 寄送 EmailJS 通知給管理者
+async function sendApprovalEmail(userData, inviteCode) {
+    const service  = gs('ejsService');
+    const template = gs('ejsTemplate');
+    const pubKey   = gs('ejsKey');
+    const adminEmail = gs('adminEmail');
+    if (!service || !template || !pubKey || !adminEmail) return; // EmailJS 未設定，靜默跳過
+    try {
+        if (typeof emailjs !== 'undefined') {
+            emailjs.init({ publicKey: pubKey });
+            await emailjs.send(service, template, {
+                to_email:   adminEmail,
+                user_name:  userData.name,
+                user_email: userData.email,
+                invite_code: inviteCode,
+                site_name:  gs('siteName') || 'VoiceFlow AI Pro',
+                site_url:   window.location.href.split('?')[0]
+            });
+        }
+    } catch(e) {
+        console.warn('[EmailJS] 寄送失敗:', e);
+    }
+}
+
+// 處理頁面載入時的 ?grant=xxx URL 參數（管理員批准連結）
+function handleGrantParam() {
+    const params = new URLSearchParams(window.location.search);
+    const grantEmail = params.get('grant');
+    if (!grantEmail) return;
+    try {
+        const email = atob(grantEmail).trim().toLowerCase();
+        if (email && email.includes('@')) {
+            let approved = (gs('approvedEmails') || '').split('\n').map(e => e.trim()).filter(Boolean);
+            if (!approved.includes(email)) {
+                approved.push(email);
+                ss('approvedEmails', approved.join('\n'));
+                removePending(email);
+            }
+            // 清除 URL 參數
+            window.history.replaceState({}, '', window.location.pathname);
+            setTimeout(() => toast(`✅ 已核准：${email}`, 'ok'), 800);
+        }
+    } catch(e) {}
 }
 
 // ══════════════════════════════════════════
