@@ -2484,12 +2484,18 @@ function avatarColor(e){ return ACOLORS[hashStr(e)%ACOLORS.length]; }
 // 檢查是否已登入；未登入則顯示封鎖牆
 function checkAuth() {
     const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
-    const adminBypass = Date.now() < parseInt(localStorage.getItem('vf_auth_bypass') || '0');
-    if ((u && u.name) || adminBypass) {
-        hideAuthGate();
-    } else {
-        showAuthGate();
+    // 已透過 OAuth 登入 → 直接放行
+    if (u && u.name) { hideAuthGate(); return; }
+
+    // 有設定 OAuth → 強制使用正式帳號，管理員旁路無效（必須 Google/Facebook 登入）
+    const oauthConfigured = !!(gs('googleClientId') || gs('facebookAppId'));
+    if (!oauthConfigured) {
+        // 尚未設定 OAuth → 允許管理員旁路（用於初始設定階段）
+        const adminBypass = Date.now() < parseInt(localStorage.getItem('vf_auth_bypass') || '0');
+        if (adminBypass) { hideAuthGate(); return; }
     }
+
+    showAuthGate();
 }
 
 function showAuthGate() {
@@ -2511,10 +2517,13 @@ function showAuthGate() {
     if (document.getElementById('agErr')) document.getElementById('agErr').style.display = 'none';
 
     if (!googleId && !fbId) {
-        // ─ 兩個都未設定 → 顯示提示，隱藏 OAuth 區（但管理員入口永遠可用）
+        // ─ 兩個都未設定 → 顯示提示，隱藏 OAuth 區（管理員入口永遠可用）
         if (subText) subText.innerHTML = '尚未設定社群登入。<br>請管理員使用下方入口進入後台設定。';
         if (fbBtn) fbBtn.style.display = 'none';
         if (wrap)  wrap.innerHTML = '';
+        // 初始設定模式：按鈕說明完整旁路
+        const atBtn = document.querySelector('#agAdminToggle button');
+        if (atBtn) atBtn.innerHTML = '<i class="fas fa-gear" style="margin-right:6px;"></i>管理員後台設定入口';
     } else {
         if (subText) subText.innerHTML = '請使用您的 Google 或 Facebook 帳號登入<br>以繼續使用完整功能';
         // Google 按鈕
@@ -2525,6 +2534,9 @@ function showAuthGate() {
         }
         // Facebook 按鈕
         if (fbBtn) fbBtn.style.display = fbId ? 'flex' : 'none';
+        // OAuth 已設定模式：說明管理員旁路僅限設定
+        const atBtn = document.querySelector('#agAdminToggle button');
+        if (atBtn) atBtn.innerHTML = '<i class="fas fa-gear" style="margin-right:6px;"></i>管理員緊急設定入口（僅開啟後台設定）';
     }
 
     // 管理員面板重置
@@ -2561,11 +2573,20 @@ function doAuthAdminBypass() {
     const pass =  document.getElementById('agAdminPass')?.value || '';
     const errEl = document.getElementById('agAdminErr');
     if (user === gs('adminUser') && pass === gs('adminPass')) {
-        // 24 小時管理員旁路
-        localStorage.setItem('vf_auth_bypass', String(Date.now() + 86400000));
-        hideAuthGate();
         if (errEl) errEl.style.display = 'none';
-        toast('✅ 管理員模式，已跳過 OAuth 登入。請至後台設定 → 進階 填入 Client ID。', 'ok');
+        const oauthConfigured = !!(gs('googleClientId') || gs('facebookAppId'));
+        if (oauthConfigured) {
+            // OAuth 已設定 → 緊急設定模式：直接開啟後台設定，完成後回到登入牆
+            saveAdminSession();
+            document.getElementById('authGate').classList.remove('show');
+            openSettings();
+            toast('⚙️ 管理員緊急設定模式。完成設定後請使用 Google / Facebook 正式帳號登入。', 'ok');
+        } else {
+            // 尚未設定 OAuth → 完整旁路，24 小時有效（初始設定用）
+            localStorage.setItem('vf_auth_bypass', String(Date.now() + 86400000));
+            hideAuthGate();
+            toast('✅ 管理員模式，已跳過 OAuth 登入。請至後台設定 → 進階 填入 Client ID。', 'ok');
+        }
     } else {
         if (errEl) errEl.style.display = 'block';
         const p = document.getElementById('agAdminPass'); if(p) p.value = '';
@@ -2848,8 +2869,14 @@ function saveSettings() {
     if(name) ss('siteName',name);
     if(title) ss('pageTitle',title);
     ss('apiKey', apiKey);
-    ss('googleClientId', document.getElementById('sGoogleClientId').value.trim());
-    ss('facebookAppId', document.getElementById('sFacebookAppId').value.trim());
+    const newGoogleId = document.getElementById('sGoogleClientId').value.trim();
+    const newFbId     = document.getElementById('sFacebookAppId').value.trim();
+    ss('googleClientId', newGoogleId);
+    ss('facebookAppId',  newFbId);
+    // OAuth 設定完成後，舊的管理員旁路自動失效，使用者必須透過正式帳號登入
+    if (newGoogleId || newFbId) {
+        localStorage.removeItem('vf_auth_bypass');
+    }
     if(nu) ss('adminUser',nu);
     if(np) ss('adminPass',np);
     ss('modelSize',ms);
@@ -3362,9 +3389,13 @@ function initTranscriptKeyHandler() {
 
     tb.addEventListener('keydown', function(e) {
         if (e.key !== 'Enter') return;
-        const span = e.target.closest('.tr-txt');
-        if (!span || !parsedResult?.transcript) return;
+        // 無論如何先阻止 contenteditable 預設的 <div>/<br> 插入行為
+        // 這是導致「切了段落但看不到時間碼」的根本原因：
+        // 若 e.preventDefault() 放在後面，游標不在 .tr-txt 上時瀏覽器會插入原生 <div>
         e.preventDefault();
+
+        const span = e.target.closest('.tr-txt');
+        if (!span || !parsedResult?.transcript?.length) return;
 
         const idx = parseInt(span.dataset.i);
         if (isNaN(idx) || idx < 0 || idx >= parsedResult.transcript.length) return;
@@ -3657,7 +3688,11 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 // ══════════════════════════════════════════
 // 共用
 // ══════════════════════════════════════════
-function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+function closeModal(id){
+    document.getElementById(id).classList.remove('show');
+    // 後台設定關閉後，重新驗證登入狀態（若 OAuth 已設定且無正式登入，則顯示登入牆）
+    if (id === 'settingsModal') setTimeout(() => checkAuth(), 80);
+}
 let _tt=null;
 function toast(msg,type='ok'){ const el=document.getElementById('toast'); document.getElementById('toastMsg').textContent=msg; el.className='toast '+type; el.querySelector('i').className=type==='ok'?'fas fa-check-circle':'fas fa-circle-xmark'; el.classList.add('show'); if(_tt) clearTimeout(_tt); _tt=setTimeout(()=>el.classList.remove('show'),3200); }
 </script>
