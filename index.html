@@ -770,10 +770,21 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <option value="8">8碼 HH:MM:SS:FF</option>
                         <option value="9">9碼 HH:MM:SS,mmm</option>
                     </select>
+                    <select class="tc-fmt-sel" id="tcFpsSel" onchange="changeTCFps(this.value)" title="影格率" style="font-size:10.5px;padding:2px 5px;">
+                        <option value="23.976">23.976fps</option>
+                        <option value="24">24fps</option>
+                        <option value="25">25fps</option>
+                        <option value="29.97" selected>29.97fps</option>
+                        <option value="30">30fps</option>
+                        <option value="60">60fps</option>
+                    </select>
+                    <button id="chToggleBtn" class="btn" onclick="toggleChapters()" style="display:none;padding:3px 9px;font-size:11px;flex-shrink:0;" title="顯示/隱藏章節"><i class="fas fa-list-check"></i> 章節</button>
                 </div>
                 <div class="c-hd" style="margin-bottom:10px;padding-top:0;border-top:none;">
                     <div style="display:flex;gap:5px;flex-wrap:wrap;">
                         <button class="btn" onclick="manualOpenCC()" id="openccBtn" title="一鍵轉換為台灣繁體用語" style="display:none;"><i class="fas fa-language"></i> 繁體優化</button>
+                        <button class="btn" onclick="convertAllToTraditional()" id="toTradBtn" title="全文轉換為台灣繁體中文" style="display:none;"><i class="fas fa-a"></i> 簡→繁</button>
+                        <button class="btn" onclick="convertAllToSimplified()" id="toSimpBtn" title="全文轉換為簡體中文" style="display:none;"><i class="fas fa-a"></i> 繁→簡</button>
                         <button class="btn" onclick="reapplyHighlights()"><i class="fas fa-highlighter"></i> 套用標記</button>
                         <button class="btn" onclick="exportTXT()"><i class="fas fa-file-lines"></i> TXT</button>
                         <button class="btn btn-p" onclick="exportSRT()"><i class="fas fa-closed-captioning"></i> SRT</button>
@@ -896,6 +907,9 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             <div style="font-size:12px;color:var(--text-secondary);margin-top:3px;" id="modalUserEmail"></div>
             <div style="font-size:10.5px;color:var(--text-tertiary);margin-top:4px;" id="modalUserProvider"></div>
         </div>
+        <button class="btn btn-full" onclick="doSwitchAccount()" style="margin-bottom:8px;">
+            <i class="fas fa-arrows-rotate"></i> 切換帳號
+        </button>
         <button class="btn btn-danger btn-full" onclick="doLogout()">
             <i class="fas fa-right-from-bracket"></i> 登出帳號
         </button>
@@ -926,10 +940,10 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 </div>
                 <hr class="divider">
                 <div class="s-sec">
-                    <div class="s-lbl">更新管理員帳密</div>
+                    <div class="s-lbl">管理員帳密</div>
                     <div class="fg" style="margin-bottom:6px;">
-                        <div><label class="fl">新帳號</label><input type="text" class="fi" id="sNewUser" placeholder="留空不更改"></div>
-                        <div><label class="fl">新密碼</label><input type="password" class="fi" id="sNewPass" placeholder="留空不更改"></div>
+                        <div><label class="fl">管理員帳號</label><input type="text" class="fi" id="sNewUser" placeholder="管理員帳號"></div>
+                        <div><label class="fl">管理員密碼</label><input type="password" class="fi" id="sNewPass" placeholder="管理員密碼"></div>
                     </div>
                 </div>
             </div>
@@ -1274,10 +1288,14 @@ const WHISPER_MODELS = {
     'medium': 'Xenova/whisper-medium'    // ~1.5GB  高精準（需足夠 RAM）
 };
 
-// ── OpenCC 繁體轉換器 ──
-let twConverter = null;
+// ── OpenCC 繁體/簡體轉換器 ──
+let twConverter = null; // 簡體 → 台灣繁體
+let t2sConverter = null; // 台灣繁體 → 簡體
 try {
-    if (typeof OpenCC !== 'undefined') twConverter = OpenCC.Converter({ from: 'cn', to: 'twp' });
+    if (typeof OpenCC !== 'undefined') {
+        twConverter  = OpenCC.Converter({ from: 'cn',  to: 'twp' });
+        t2sConverter = OpenCC.Converter({ from: 'tw',  to: 'cn'  });
+    }
 } catch(e) {}
 
 // ── State ──
@@ -1296,6 +1314,7 @@ let findMatches=[], findIdx=0;
 // ── 專案 & 時間碼 State ──
 let currentProjectId=null, currentProjectName='未命名專案';
 let tcFormat = localStorage.getItem('vf_tc_format') || '8'; // '8'=SMPTE HH:MM:SS:FF, '9'=SRT HH:MM:SS,mmm
+let tcFps = parseFloat(localStorage.getItem('vf_tc_fps') || '29.97'); // 影格率，預設 29.97fps
 
 // ══════════════════════════════════════════
 // 初始化
@@ -1393,6 +1412,9 @@ window.onload = () => {
     // 初始化時間碼格式
     const tcSel = document.getElementById('tcFormatSel');
     if (tcSel) { tcSel.value = tcFormat; document.getElementById('tcFmtBadge').textContent = tcFormat==='8'?'8碼 SMPTE':'9碼 SRT'; }
+    // 初始化影格率選單
+    const fpsSel = document.getElementById('tcFpsSel');
+    if (fpsSel) fpsSel.value = String(tcFps);
 
     // 頁面關閉/重整時釋放模型記憶體，避免 VRAM/RAM 洩漏
     window.addEventListener('beforeunload', () => {
@@ -2179,18 +2201,24 @@ async function runGeminiTranscription(model, lt) {
     const langName = LANG_DISPLAY[langCode] || langCode;
     const isTW = langCode === 'zh-TW';
 
-    // 繁體中文規則（精簡版，減少 token 消耗以加快回應速度）
-    const twRule = isTW ? '\n【語言】全程使用台灣繁體正體字，禁止出現任何簡體字。' : '';
+    // 繁體中文規則
+    const twRule = isTW ? '\n【語言】全程使用台灣繁體正體字及台灣慣用詞彙，嚴禁出現任何簡體字或中國大陸用語。' : '';
 
-    const prompt = `你是專業語音辨識 AI，精確還原音訊口語內容。${twRule}
-【規則】
-1. 語言：${langName}。每段最多 ${maxCh} 字，依語意斷句。
-2. 禁止重複相同句子；僅輸出音訊中真實的聲音。
-3. 時間戳記：${wantTime ? 'HH:MM:SS,mmm（例 00:00:05,240）' : 'start/end 填空字串'}。
-4. 說話者：${wantDiar ? 'Speaker A/B 等' : 'speaker 填空字串'}。
-5. 章節：${wantChap ? '{"time":"MM:SS","title":"名稱"}' : 'chapters:[]'}。
-6. 只輸出純 JSON，無任何 markdown 或說明。
-格式：{"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容"}],"chapters":[]}`;
+    const prompt = `你是頂尖專業語音辨識與逐字稿 AI，任務是精確、完整地還原音訊中的口語內容。${twRule}
+
+【核心規則】
+1. 語言：${langName}。每段最多 ${maxCh} 字，依自然語意停頓斷句，句子務必完整。
+2. 忠實還原：逐字轉錄，保留語氣詞（嗯、啊、那個等），勿擅自刪改或潤飾。
+3. 標點符號：正確加入句號、逗號、問號、驚嘆號，提升可讀性。
+4. 禁止重複：不得輸出相同或極度相似的句子（幻覺重複）。
+5. 禁止推測：若音訊不清晰，標記 [不清楚]，勿臆測內容。
+6. 時間戳記：${wantTime ? '精確至毫秒，格式 HH:MM:SS,mmm（例 00:00:05,240）；start/end 務必填寫。' : 'start 與 end 填空字串 ""。'}
+7. 說話者：${wantDiar ? '依聲音特徵區分，標記 Speaker A / Speaker B 等，同一人保持一致。' : 'speaker 填空字串 ""。'}
+8. 章節：${wantChap ? '依內容主題自動分章，time 格式 MM:SS，title 簡短描述。' : 'chapters 輸出空陣列 []。'}
+9. 輸出格式：純 JSON，不得包含任何 markdown、程式碼區塊或說明文字。
+
+輸出格式範例：
+{"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容文字"}],"chapters":[]}`;
 
     const payload = {
         contents: [{ parts: [{ text: prompt }, audioPart] }],
@@ -2273,7 +2301,7 @@ async function runGeminiTranscription(model, lt) {
     if (jsonStart === -1) throw new Error(`AI 回傳格式錯誤，無法解析 JSON。原始回應前50字：${rawText.slice(0,50)}`);
     rawText = rawText.slice(jsonStart);
     // ── 嘗試解析 JSON；若被截斷則自動修復 ──
-    parsedResult = sanitizeResult(recoverJSON(rawText), langCode);
+    parsedResult = sanitizeResult(recoverJSON(rawText), langCode, maxCh);
 }
 
 // 解析 JSON；若截斷則嘗試多種修復策略
@@ -2381,8 +2409,62 @@ function manualOpenCC() {
     toast('已完成台灣繁體用語優化', 'ok');
 }
 
+// 全文轉換：繁體 → 簡體
+function convertAllToSimplified() {
+    if (!parsedResult?.transcript) { toast('尚無逐字稿可轉換', 'err'); return; }
+    if (!t2sConverter) { toast('OpenCC 尚未載入，請確認網路連線後重新整理', 'err'); return; }
+    pushUndo();
+    parsedResult.transcript.forEach(line => {
+        if (line.text) line.text = t2sConverter(line.text);
+    });
+    renderResults();
+    toast('已轉換為簡體中文', 'ok');
+}
+
+// 全文轉換：簡體 → 繁體（台灣用語）
+function convertAllToTraditional() {
+    if (!parsedResult?.transcript) { toast('尚無逐字稿可轉換', 'err'); return; }
+    if (!twConverter) { toast('OpenCC 尚未載入，請確認網路連線後重新整理', 'err'); return; }
+    pushUndo();
+    parsedResult.transcript.forEach(line => {
+        if (line.text) line.text = twConverter(line.text);
+    });
+    renderResults();
+    toast('已轉換為台灣繁體中文', 'ok');
+}
+
+// 將長文字按語意分割成不超過 maxC 字的片段
+function splitLongText(text, maxC) {
+    if (!text || text.length <= maxC) return [text];
+    const chunks = [];
+    // 優先在標點符號處斷行
+    const puncts = /[，。！？、；,!?;]/g;
+    let last = 0;
+    let m;
+    while ((m = puncts.exec(text)) !== null) {
+        if (m.index + 1 - last >= maxC) {
+            // 超過 maxC，強制在此斷
+            chunks.push(text.slice(last, m.index + 1).trim());
+            last = m.index + 1;
+        }
+    }
+    // 剩餘文字
+    if (last < text.length) {
+        const remain = text.slice(last);
+        // 若剩餘仍超過 maxC，強制按字數切
+        if (remain.length > maxC) {
+            for (let i = 0; i < remain.length; i += maxC) {
+                chunks.push(remain.slice(i, i + maxC).trim());
+            }
+        } else {
+            chunks.push(remain.trim());
+        }
+    }
+    return chunks.filter(Boolean).length ? chunks.filter(Boolean) : [text];
+}
+
 // 後處理：移除重複幻覺段落，並套用繁簡轉換
-function sanitizeResult(result, langCode) {
+function sanitizeResult(result, langCode, maxCh) {
     if (!result?.transcript) return result;
     const doS2T = (langCode === 'zh-TW');
     const seen = new Set();
@@ -2423,6 +2505,22 @@ function sanitizeResult(result, langCode) {
         seen.add(key); seenNorm.add(norm);
         return true;
     });
+    // 強制分割超過 maxCh 字的段落
+    const maxC = parseInt(maxCh || document.getElementById('maxChars')?.value || 0);
+    if (maxC > 0) {
+        const expanded = [];
+        for (const line of result.transcript) {
+            if (line.text && line.text.length > maxC) {
+                const parts = splitLongText(line.text, maxC);
+                parts.forEach((part, pi) => {
+                    expanded.push({ ...line, text: part, _split: pi > 0 });
+                });
+            } else {
+                expanded.push(line);
+            }
+        }
+        result.transcript = expanded;
+    }
     return result;
 }
 
@@ -2436,9 +2534,13 @@ function finishTranscription() {
     document.getElementById('loadingModal').classList.remove('show');
     updateStartBtn();
     document.getElementById('navEditor').style.display='flex';
-    // 若 OpenCC 已載入則顯示繁體優化按鈕
+    // 若 OpenCC 已載入則顯示繁體優化與轉換按鈕
     const openccBtn = document.getElementById('openccBtn');
     if (openccBtn) openccBtn.style.display = twConverter ? '' : 'none';
+    const toTradBtn = document.getElementById('toTradBtn');
+    if (toTradBtn) toTradBtn.style.display = (twConverter && t2sConverter) ? '' : 'none';
+    const toSimpBtn = document.getElementById('toSimpBtn');
+    if (toSimpBtn) toSimpBtn.style.display = (twConverter && t2sConverter) ? '' : 'none';
     goSection('subtitleEditor');
     autoSaveProject();
     toast('轉錄完成！已儲存至「我的專案」', 'ok');
@@ -2472,7 +2574,7 @@ function renderResults() {
             const spStyle = spColor ? `background:${spColor}22;color:${spColor};border-color:${spColor}44;` : '';
             spHtml = `<span class="sp-tag" data-sp="${esc(line.speaker)}" style="${spStyle}">${esc(spName)}</span> `;
         }
-        const tcStr=(line.start&&showTime)?`<span class="tr-tc" data-i="${i}" style="font-size:${Math.max(9,curSize*0.72)}px;">${formatTC(line.start)}</span>`:'';
+        const tcStr=showTime?`<span class="tr-tc" data-i="${i}" style="font-size:${Math.max(9,curSize*0.72)}px;${!line.start?'color:var(--text-tertiary);':''}">${line.start?formatTC(line.start):(tcFormat==='9'?'--:--:--,---':'--:--:--:--')}</span>`:'';
         html+=`<div class="tr-line" data-i="${i}">${tcStr}${spHtml}<span class="tr-txt" contenteditable="true" data-i="${i}">${text}</span></div>`;
     });
     tb.innerHTML=html;
@@ -2483,6 +2585,8 @@ function renderResults() {
     const m=Math.floor(audioDuration/60),s=Math.floor(audioDuration%60);
     document.getElementById('statDuration').textContent=`${p2(m)}:${p2(s)}`;
     const hasCh=parsedResult.chapters?.length>0;
+    const chToggleBtn = document.getElementById('chToggleBtn');
+    if (chToggleBtn) { chToggleBtn.style.display = hasCh ? '' : 'none'; chToggleBtn.classList.remove('btn-p'); }
     document.getElementById('chaptersContainer').style.display=hasCh?'flex':'none';
     if(hasCh){
         document.getElementById('chapterList').innerHTML=parsedResult.chapters.map(ch=>
@@ -2687,6 +2791,10 @@ function renderAdminAllProjects() {
             grid.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><h3>尚無用戶記錄</h3><p>用戶首次登入後將顯示於此。</p></div>';
             return;
         }
+        // 取得所有用戶清單（用於複製目標選單）
+        const allUserOptions = entries.map(([h, info]) =>
+            `<option value="${esc(h)}">${esc(info.name||info.email)}</option>`
+        ).join('');
         let html = '';
         for (const [h, info] of entries) {
             const catsRaw = localStorage.getItem('vf_cats_' + h);
@@ -2694,21 +2802,75 @@ function renderAdminAllProjects() {
             const total = cats.reduce((a,c)=>a+c.folders.reduce((b,f)=>b+f.projects.length,0),0);
             const trashRaw = localStorage.getItem('vf_trash_' + h);
             const trashCnt = trashRaw ? (JSON.parse(trashRaw)||[]).length : 0;
-            html += `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
-                <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;">${esc((info.name||'?')[0].toUpperCase())}</div>
-                <div style="flex:1;min-width:0;">
-                    <div style="font-size:13px;font-weight:700;color:var(--text-primary);">${esc(info.name||'未知')}</div>
-                    <div style="font-size:11px;color:var(--text-secondary);">${esc(info.email)} · 最後登入：${info.lastLogin ? new Date(info.lastLogin).toLocaleDateString('zh-TW') : '—'}</div>
+            // 展開列出所有專案
+            let projRows = '';
+            for (const cat of cats) {
+                for (const folder of (cat.folders||[])) {
+                    for (const proj of (folder.projects||[])) {
+                        const targetOpts = entries.filter(([th])=>th!==h)
+                            .map(([th,ti])=>`<option value="${esc(th)}">${esc(ti.name||ti.email)}</option>`).join('');
+                        projRows += `<div style="display:flex;align-items:center;gap:8px;padding:5px 10px 5px 16px;border-top:1px solid var(--border);">
+                            <i class="fas fa-file-audio" style="color:var(--text-tertiary);font-size:11px;flex-shrink:0;"></i>
+                            <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(cat.name+' › '+folder.name)}">${esc(proj.name)}<span style="color:var(--text-tertiary);font-size:10px;margin-left:5px;">${esc(cat.name)} › ${esc(folder.name)}</span></span>
+                            <select style="font-size:10.5px;padding:2px 4px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-secondary);max-width:120px;" id="cpyTo_${esc(h)}_${esc(proj.id)}" ${!targetOpts?'disabled':''}>
+                                <option value="">複製到…</option>${targetOpts}
+                            </select>
+                            <button class="btn" style="font-size:10.5px;padding:3px 8px;flex-shrink:0;" onclick="adminCopyProject('${esc(h)}','${esc(proj.id)}')"><i class="fas fa-copy"></i></button>
+                        </div>`;
+                    }
+                }
+            }
+            html += `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);margin-bottom:10px;overflow:hidden;">
+                <div style="padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+                    <div style="width:34px;height:34px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0;">${esc((info.name||'?')[0].toUpperCase())}</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:700;color:var(--text-primary);">${esc(info.name||'未知')}</div>
+                        <div style="font-size:11px;color:var(--text-secondary);">${esc(info.email)} · 最後登入：${info.lastLogin ? new Date(info.lastLogin).toLocaleDateString('zh-TW') : '—'}</div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="font-size:12px;font-weight:700;color:var(--primary);">${total} 個專案</div>
+                        <div style="font-size:10.5px;color:var(--text-tertiary);">垃圾桶 ${trashCnt} 筆</div>
+                    </div>
+                    <i class="fas fa-chevron-down" style="color:var(--text-tertiary);font-size:11px;flex-shrink:0;"></i>
                 </div>
-                <div style="text-align:right;flex-shrink:0;">
-                    <div style="font-size:12px;font-weight:700;color:var(--primary);">${total} 個專案</div>
-                    <div style="font-size:10.5px;color:var(--text-tertiary);">垃圾桶 ${trashCnt} 筆</div>
-                </div>
+                <div style="display:none;">${projRows || '<div style="padding:10px 16px;font-size:12px;color:var(--text-tertiary);">此帳號尚無專案</div>'}</div>
             </div>`;
         }
         grid.innerHTML = html;
     } catch(e) {
         grid.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>載入失敗</h3></div>';
+    }
+}
+
+// 管理員複製專案到另一帳號
+function adminCopyProject(srcHash, projId) {
+    const selEl = document.getElementById(`cpyTo_${srcHash}_${projId}`);
+    const dstHash = selEl ? selEl.value : '';
+    if (!dstHash) { toast('請先選擇目標帳號', 'err'); return; }
+    try {
+        const srcCats = JSON.parse(localStorage.getItem('vf_cats_' + srcHash) || '[]');
+        let srcProj = null;
+        for (const cat of srcCats) {
+            for (const folder of (cat.folders||[])) {
+                const p = folder.projects.find(p=>String(p.id)===String(projId));
+                if (p) { srcProj = p; break; }
+            }
+            if (srcProj) break;
+        }
+        if (!srcProj) { toast('找不到來源專案', 'err'); return; }
+        const dstCats = JSON.parse(localStorage.getItem('vf_cats_' + dstHash) || '[]');
+        if (!dstCats.length) dstCats.push({ id:Date.now(), name:'未分類', open:true, folders:[] });
+        if (!dstCats[0].folders.length) dstCats[0].folders.push({ id:Date.now()+1, name:'主要', open:true, projects:[] });
+        const copy = JSON.parse(JSON.stringify(srcProj));
+        copy.id = Date.now() + Math.floor(Math.random()*1000);
+        copy.name = copy.name + '（複製）';
+        dstCats[0].folders[0].projects.unshift(copy);
+        localStorage.setItem('vf_cats_' + dstHash, JSON.stringify(dstCats));
+        const idx = JSON.parse(localStorage.getItem('vf_user_index') || '{}');
+        const dstName = idx[dstHash]?.name || dstHash;
+        toast(`已複製「${copy.name}」至 ${dstName}`, 'ok');
+    } catch(e) {
+        toast('複製失敗：' + e.message, 'err');
     }
 }
 
@@ -2800,6 +2962,13 @@ function loadProject(id) {
 
     _undoStack = []; // 切換專案時清空還原堆疊
     renderResults();
+    // 顯示 OpenCC 轉換按鈕
+    const openccBtn2 = document.getElementById('openccBtn');
+    if (openccBtn2) openccBtn2.style.display = twConverter ? '' : 'none';
+    const toTradBtn2 = document.getElementById('toTradBtn');
+    if (toTradBtn2) toTradBtn2.style.display = (twConverter && t2sConverter) ? '' : 'none';
+    const toSimpBtn2 = document.getElementById('toSimpBtn');
+    if (toSimpBtn2) toSimpBtn2.style.display = (twConverter && t2sConverter) ? '' : 'none';
     goSection('subtitleEditor');
     toast(`已載入：${p.name}（請點擊「選擇音訊/影片」以啟用播放）`, 'ok');
 }
@@ -3327,6 +3496,13 @@ function openLogin() {
     document.getElementById('loginModal').classList.add('show');
 }
 
+// 切換帳號：不清除當前 session，直接開啟登入牆，新登入成功後才覆蓋
+function doSwitchAccount() {
+    closeModal('loginModal');
+    showAuthGate();
+    toast('請選擇要切換的帳號登入', 'ok');
+}
+
 function doLogout() {
     // 登出 Google One Tap（避免下次自動登入）
     if (window.google?.accounts?.id) {
@@ -3419,8 +3595,8 @@ function openSettings() {
     document.getElementById('sApiKey').value=gs('apiKey');
     document.getElementById('sGoogleClientId').value=gs('googleClientId');
     document.getElementById('sFacebookAppId').value=gs('facebookAppId');
-    document.getElementById('sNewUser').value='';
-    document.getElementById('sNewPass').value='';
+    document.getElementById('sNewUser').value = gs('adminUser') || '';
+    document.getElementById('sNewPass').value = gs('adminPass') || '';
     document.getElementById('sModelSize').value=gs('modelSize');
     const stcf = document.getElementById('sTCFormat');
     if (stcf) stcf.value = localStorage.getItem('vf_tc_format') || '8';
@@ -3471,8 +3647,8 @@ function saveSettings() {
     if (newGoogleId || newFbId) {
         localStorage.removeItem('vf_auth_bypass');
     }
-    if(nu) ss('adminUser',nu);
-    if(np) ss('adminPass',np);
+    ss('adminUser', nu || gs('adminUser') || 'mark');
+    ss('adminPass', np || gs('adminPass') || 'mark888');
     ss('modelSize',ms);
     // TC format
     const stcf = document.getElementById('sTCFormat');
@@ -3955,8 +4131,8 @@ function formatTC(srtStr) {
         const ms = Math.round((t % 1) * 1000);
         return `${p2(h)}:${p2(m)}:${p2(s)},${String(ms).padStart(3, '0')}`;
     }
-    // 8碼 SMPTE HH:MM:SS:FF (30fps)
-    const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60), ff=Math.floor((t%1)*30);
+    // 8碼 SMPTE HH:MM:SS:FF（使用 tcFps 影格率）
+    const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60), ff=Math.floor((t%1)*tcFps);
     return `${p2(h)}:${p2(m)}:${p2(s)}:${p2(ff)}`;
 }
 function changeTCFormat(val) {
@@ -3964,6 +4140,19 @@ function changeTCFormat(val) {
     localStorage.setItem('vf_tc_format', val);
     document.getElementById('tcFmtBadge').textContent = val==='8' ? '8碼 SMPTE' : '9碼 SRT';
     renderResults();
+}
+function changeTCFps(val) {
+    tcFps = parseFloat(val) || 29.97;
+    localStorage.setItem('vf_tc_fps', val);
+    if (tcFormat === '8') renderResults(); // 只有 SMPTE 模式受影格率影響
+}
+function toggleChapters() {
+    const cc = document.getElementById('chaptersContainer');
+    if (!cc) return;
+    const visible = cc.style.display !== 'none' && cc.style.display !== '';
+    cc.style.display = visible ? 'none' : 'flex';
+    const btn = document.getElementById('chToggleBtn');
+    if (btn) btn.classList.toggle('btn-p', !visible);
 }
 
 // ══════════════════════════════════════════
