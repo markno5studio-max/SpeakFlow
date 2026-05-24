@@ -485,9 +485,11 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <div class="user-sub" id="userSub">訪客模式</div>
             </div>
         </div>
-        <div class="sb-settings" id="settingsBtn"><i class="fas fa-gear"></i> <span id="settingsBtnLabel">後台設定</span></div>
-        <div class="sb-settings" id="adminLoginBtn" onclick="showAdminLoginFromSidebar()" style="display:none;font-size:11.5px;padding:7px 12px;color:var(--text-tertiary);">
-            <i class="fas fa-shield-halved" style="font-size:11px;"></i> 管理員登入
+        <!-- 後台設定：永遠可見，所有人都看得到，點擊後需管理員密碼 -->
+        <div class="sb-settings" id="settingsBtn"><i class="fas fa-gear"></i> 後台設定</div>
+        <!-- 個人設定：只有非管理員的已登入用戶才顯示 -->
+        <div class="sb-settings" id="userPrefsBtn" onclick="openUserSettings()" style="display:none;font-size:11.5px;padding:7px 12px;">
+            <i class="fas fa-sliders" style="font-size:11px;"></i> 個人設定
         </div>
     </div>
 </aside>
@@ -1965,11 +1967,14 @@ async function stopMicAndTranscribe() {
     try {
         const result = await transcriber(merged, {
             chunk_length_s: 30,
-            stride_length_s: 4,
+            stride_length_s: 6,
             language: whisperLang,
             task: 'transcribe',
             return_timestamps: true,
             num_beams: 1,
+            temperature: 0,
+            condition_on_prev_tokens: true,
+            no_repeat_ngram_size: 3,
         });
         const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
         parsedResult = sanitizeResult(whisperToResult(result, maxCh), langCode);
@@ -2276,8 +2281,18 @@ async function runLocalTranscription(lt) {
     const maxCh = document.getElementById('maxChars').value;
     const whisperLang = WHISPER_LANG[langCode] || 'zh';
     lt.textContent = `Whisper 本地辨識中（語言：${LANG_DISPLAY[langCode]}，依音訊長度可能需數分鐘）...`;
-    // 效能優化：greedy 推論（num_beams:1）+ 較大分段（chunk_length_s:30）+ 小重疊（stride:4）
-    const opts = { chunk_length_s: 30, stride_length_s: 4, language: whisperLang, task: 'transcribe', return_timestamps: true, num_beams: 1 };
+    // 效能優化：greedy 推論（num_beams:1）+ 較大分段（30s）+ 加大重疊（stride:6）防止邊界丟字
+    const opts = {
+        chunk_length_s: 30,
+        stride_length_s: 6,        // 增加重疊（4→6）：減少分段邊界的字詞丟失
+        language: whisperLang,
+        task: 'transcribe',
+        return_timestamps: true,
+        num_beams: 1,              // 保持 greedy（速度優先）
+        temperature: 0,            // 確定性輸出，避免隨機幻覺
+        condition_on_prev_tokens: true, // 使用前文調整後段辨識，提升連貫性
+        no_repeat_ngram_size: 3,   // 防止 3-gram 重複（減少幻覺重複句）
+    };
     let result;
     try {
         result = await transcriber(audioData, opts);
@@ -2336,29 +2351,43 @@ async function runGeminiTranscription(model, lt) {
     // 繁體中文規則
     const twRule = isTW ? '\n【語言】全程使用台灣繁體正體字及台灣慣用詞彙，嚴禁出現任何簡體字或中國大陸用語。' : '';
 
-    const prompt = `你是頂尖專業語音辨識與逐字稿 AI，任務是精確、完整地還原音訊中的口語內容。${twRule}
+    const prompt = `你是頂尖專業語音辨識與逐字稿 AI，擁有超強的聽音辨字、語意理解與專業術語識別能力。任務是精確、完整地還原音訊中每一個字。${twRule}
 
-【核心規則】
-1. 語言：${langName}。每段最多 ${maxCh} 字，依自然語意停頓斷句，句子務必完整。
-2. 忠實還原：逐字轉錄，保留語氣詞（嗯、啊、那個等），勿擅自刪改或潤飾。
-3. 標點符號：正確加入句號、逗號、問號、驚嘆號，提升可讀性。
-4. 禁止重複：不得輸出相同或極度相似的句子（幻覺重複）。
-5. 禁止推測：若音訊不清晰，標記 [不清楚]，勿臆測內容。
-6. 時間戳記：${wantTime ? '精確至毫秒，格式 HH:MM:SS,mmm（例 00:00:05,240）；start/end 務必填寫。' : 'start 與 end 填空字串 ""。'}
-7. 說話者：${wantDiar ? '依聲音特徵區分，標記 Speaker A / Speaker B 等，同一人保持一致。' : 'speaker 填空字串 ""。'}
-8. 章節：${wantChap ? '依內容主題自動分章，time 格式 MM:SS，title 簡短描述。' : 'chapters 輸出空陣列 []。'}
-9. 輸出格式：純 JSON，不得包含任何 markdown、程式碼區塊或說明文字。
+【核心轉錄規則】
+1. 語言：${langName}。每段最多 ${maxCh} 字，依自然語意停頓斷句，句子務必完整，不可在語意中間截斷。
+2. 完整逐字：一字不漏地轉錄所有可辨識的語音，保留語氣詞（嗯、啊、那個、對對對等）。
+3. 標點符號：正確加入句號、逗號、問號、驚嘆號、頓號，反映語氣與停頓。
+4. 禁止重複：絕對不得輸出相同或極度相似的句子（避免 AI 幻覺重複）。
+5. 不清楚音訊：標記 [不清楚]，切勿臆測或捏造內容。
+
+【專有名詞與精準辨識】
+6. 人名、地名、品牌名、產品名、公司名、組織名：依上下文推斷正確寫法，優先使用最常見的官方名稱。
+7. 專業術語：技術、醫學、法律、財務、科學、工程等領域術語，必須精確辨識，不可用通用詞替代。
+8. 形容詞與副詞：仔細辨識程度副詞（非常、極度、稍微等）及形容詞，不可省略或混淆。
+9. 同音字辨義：根據上下文語意選擇正確的同音字（例：「機器」vs「幾期」、「一致」vs「異質」）。
+10. 數字與單位：正確識別數字（阿拉伯數字或中文數字）及計量單位，保持與說話者原文一致。
+
+【輸出規格】
+11. 時間戳記：${wantTime ? '精確至毫秒，格式 HH:MM:SS,mmm（例 00:00:05,240）；每段 start/end 必須填寫，不可為空。' : 'start 與 end 填空字串 ""。'}
+12. 說話者：${wantDiar ? '依聲音音色、語氣、節奏區分不同說話者，標記 Speaker A / Speaker B 等，同一人在全篇必須使用相同標記。' : 'speaker 填空字串 ""。'}
+13. 章節：${wantChap ? '依內容主題語義變化自動分章，time 格式 MM:SS，title 以 5 字以內精準描述章節主題。' : 'chapters 輸出空陣列 []。'}
+14. 輸出格式：純 JSON，禁止包含任何 markdown、程式碼區塊符號（\`\`\`）或額外說明文字。
 
 輸出格式範例：
 {"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容文字"}],"chapters":[]}`;
 
+    // Gemini 2.5 系列支援 thinkingConfig（深度推理，提升專有名詞辨識精度）
+    const isThinkingModel = model.includes('2.5');
     const payload = {
         contents: [{ parts: [{ text: prompt }, audioPart] }],
         generationConfig: {
-            temperature: 0,
+            temperature: 0,          // 確定性輸出，避免幻覺
             maxOutputTokens: 65536,
             responseMimeType: 'application/json'  // JSON 模式：加快回應 + 減少格式錯誤
-        }
+        },
+        ...(isThinkingModel && {
+            thinkingConfig: { thinkingBudget: 2048 } // 適中思考預算，平衡精度與速度
+        })
     };
 
     lt.textContent = `${modelLabel} 辨識中，請稍候（大型音訊可能需 1～3 分鐘）...`;
@@ -2836,7 +2865,7 @@ function setProjView(v) {
     else if (v==='admin') renderAdminAllProjects();
     else renderProjects();
 }
-// 顯示/隱藏管理員按鈕 & 同步側欄狀態（依登入帳號 + admin session 決定）
+// 顯示/隱藏管理員頁籤 & 個人設定按鈕（依登入帳號 + admin session 決定）
 function updateAdminProjTab() {
     const isAdmin = isAdminUser();
     const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
@@ -2845,13 +2874,10 @@ function updateAdminProjTab() {
     const btn = document.getElementById('projViewAdmin');
     if (btn) btn.style.display = isAdmin ? '' : 'none';
 
-    // 「管理員登入」側欄按鈕：有用戶登入但尚未取得管理員 session 時才顯示
-    const adminLoginBtn = document.getElementById('adminLoginBtn');
-    if (adminLoginBtn) adminLoginBtn.style.display = (u && !isAdminSessionValid()) ? '' : 'none';
-
-    // 側欄設定按鈕標籤：管理員 = 後台設定，一般用戶 = 個人設定
-    const lbl = document.getElementById('settingsBtnLabel');
-    if (lbl) lbl.textContent = isAdmin ? '後台設定' : (u ? '個人設定' : '後台設定');
+    // 「個人設定」按鈕：有非管理員用戶登入時才顯示
+    const userPrefsBtn = document.getElementById('userPrefsBtn');
+    if (userPrefsBtn) userPrefsBtn.style.display = (u && !isAdmin) ? '' : 'none';
+    // 「後台設定」按鈕：永遠顯示，不需更新標籤
 }
 
 function autoSaveProject() {
@@ -3441,11 +3467,11 @@ function doAuthAdminBypass() {
     const errEl = document.getElementById('agAdminErr');
     if (user === gs('adminUser') && pass === gs('adminPass')) {
         if (errEl) errEl.style.display = 'none';
-        saveAdminSession();
-        // 儲存管理員身份（使用通用 remember-me 系統）
+        // 先設定 sessionStorage，再呼叫 saveAdminSession（確保 hash 綁定正確用戶）
         const adminEmail = gs('adminEmail') || (user + '@admin.local');
         const stored = { name: user, email: adminEmail, provider: 'admin', color: '#d4a254' };
         sessionStorage.setItem('vf_user', JSON.stringify(stored));
+        saveAdminSession(); // 綁定至上方設定的管理員身份
         applyRememberPreference(stored);
         updateUserUI(); // updateUserUI 內部呼叫 updateAdminProjTab
         document.getElementById('authGate').classList.remove('show');
@@ -3693,15 +3719,16 @@ function openLogin() {
                 </div>
                 <div style="flex:1;min-width:0;">
                     <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.user.name||'未知')}</div>
-                    <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.user.email||'')} ${s.isCurrent ? '<span style="color:var(--primary);font-size:10px;">● 目前登入</span>' : ''}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.user.email||'')} ${s.isCurrent ? '<span style="color:var(--primary);font-size:10px;">● 目前</span>' : ''}</div>
                 </div>
+                ${!s.isCurrent ? `<button class="btn btn-p" style="font-size:11px;padding:4px 10px;flex-shrink:0;" onclick="switchToSession('${esc(s.key)}')"><i class="fas fa-arrows-rotate"></i> 切換</button>` : ''}
                 <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;flex-shrink:0;" onclick="doLogoutSession('${esc(s.key)}','${esc(s.user.email||'')}')">
                     <i class="fas fa-right-from-bracket"></i> 登出
                 </button>
             </div>
         `).join('') + `
             <div style="display:flex;gap:8px;margin-top:14px;">
-                <button class="btn btn-full" onclick="doSwitchAccount()"><i class="fas fa-arrows-rotate"></i> 切換帳號</button>
+                <button class="btn btn-full" onclick="doSwitchAccount()"><i class="fas fa-plus"></i> 新增帳號</button>
             </div>
         `;
     }
@@ -3709,11 +3736,33 @@ function openLogin() {
     document.getElementById('loginModal').classList.add('show');
 }
 
-// 切換帳號：不清除當前 session，直接開啟登入牆，新登入成功後才覆蓋
+// 直接切換至另一個已記住的帳號（無需重新 OAuth 驗證）
+function switchToSession(key) {
+    try {
+        const s = JSON.parse(localStorage.getItem(key) || 'null');
+        if (!s?.user) { toast('找不到此帳號的 session', 'err'); return; }
+        const expiry = s.expiry || 0;
+        if (expiry !== 0 && Date.now() > expiry) {
+            localStorage.removeItem(key);
+            toast('此帳號工作階段已過期，請重新登入', 'err');
+            openLogin(); return;
+        }
+        // 切換帳號時清除管理員 session（避免舊 admin token 污染新帳號）
+        clearAdminSession();
+        sessionStorage.setItem('vf_user', JSON.stringify(s.user));
+        applyUserPreferences(); // 套用新帳號的個人偏好
+        updateUserUI();
+        renderProjects();
+        closeModal('loginModal');
+        toast(`已切換至 ${s.user.name}`, 'ok');
+    } catch(e) { toast('切換帳號失敗', 'err'); }
+}
+
+// 新增帳號：開啟登入牆讓用戶以新的 Google / Facebook 帳號登入
 function doSwitchAccount() {
     closeModal('loginModal');
     showAuthGate();
-    toast('請選擇要切換的帳號登入', 'ok');
+    toast('請使用 Google / Facebook 登入新帳號', 'ok');
 }
 
 function doLogout() {
@@ -3769,26 +3818,31 @@ function updateUserUI() {
     updateAdminProjTab(); // 同步側欄管理員按鈕與標籤
 }
 
-// ── 側欄「管理員登入」按鈕：開啟管理員密碼驗證 ──
-function showAdminLoginFromSidebar() {
-    document.getElementById('gateUser').value = '';
-    document.getElementById('gatePass').value = '';
-    document.getElementById('gateErr').style.display = 'none';
-    document.getElementById('loginGateModal').classList.add('show');
-    setTimeout(() => document.getElementById('gateUser').focus(), 80);
-}
-
 // ══════════════════════════════════════════
 // 後台設定 (Admin Gate)
 // ══════════════════════════════════════════
 function isAdminSessionValid() {
-    return Date.now() < parseInt(localStorage.getItem('vf_admin_session') || '0');
+    if (Date.now() >= parseInt(localStorage.getItem('vf_admin_session') || '0')) return false;
+    // 確認此 session 是由當前用戶取得的（防止不同帳號間的 session 滲透）
+    const storedHash = localStorage.getItem('vf_admin_session_user');
+    if (!storedHash) return true; // 舊版 session（無 hash）向下相容：允許
+    try {
+        const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
+        const curHash = spHash((u?.email || '').toLowerCase().trim());
+        return storedHash === curHash;
+    } catch(e) { return false; }
 }
 function saveAdminSession() {
+    // 必須在 sessionStorage.vf_user 設定後才呼叫，以便正確記錄是哪個用戶取得了管理員 session
     localStorage.setItem('vf_admin_session', Date.now() + 86400000); // 24 小時
+    try {
+        const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
+        localStorage.setItem('vf_admin_session_user', spHash((u?.email || '').toLowerCase().trim()));
+    } catch(e) {}
 }
 function clearAdminSession() {
     localStorage.removeItem('vf_admin_session');
+    localStorage.removeItem('vf_admin_session_user'); // 清除用戶綁定 hash
     localStorage.removeItem('vf_admin_identity'); // 向下相容清理
     // 若當前 sessionStorage 是 admin 身份，一併清除 remember-me session
     try {
@@ -3802,18 +3856,9 @@ function clearAdminSession() {
 }
 
 document.getElementById('settingsBtn').onclick = () => {
-    // Admin: valid admin session → full settings
-    if (isAdminSessionValid()) {
-        openSettings();
-        return;
-    }
-    // Regular OAuth user logged in → simplified user prefs (no password gate)
-    const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
-    if (u && u.provider !== 'admin') {
-        openUserSettings();
-        return;
-    }
-    // No user / admin provider without valid session → show password gate
+    // 後台設定永遠需要管理員驗證（任何身份皆同）
+    if (isAdminSessionValid()) { openSettings(); return; }
+    // 無有效 admin session → 顯示密碼驗證視窗
     document.getElementById('gateUser').value = '';
     document.getElementById('gatePass').value = '';
     document.getElementById('gateErr').style.display = 'none';
@@ -3825,18 +3870,16 @@ function doAdminLogin() {
     const u = document.getElementById('gateUser').value.trim();
     if (u === gs('adminUser') &&
         document.getElementById('gatePass').value === gs('adminPass')) {
-        saveAdminSession();
-        // 儲存管理員身份（使用通用 remember-me 系統）
-        const adminEmail = gs('adminEmail') || (u + '@admin.local');
-        const stored = { name: u, email: adminEmail, provider: 'admin', color: '#d4a254' };
+        // 若無現有 OAuth 用戶，先建立管理員身份（須在 saveAdminSession 前設定 sessionStorage）
         if (!sessionStorage.getItem('vf_user')) {
-            // 純管理員旁路登入（沒有現有 OAuth 身份）
+            const adminEmail = gs('adminEmail') || (u + '@admin.local');
+            const stored = { name: u, email: adminEmail, provider: 'admin', color: '#d4a254' };
             sessionStorage.setItem('vf_user', JSON.stringify(stored));
             applyRememberPreference(stored);
-            applyUserPreferences(); // 套用管理員帳號個人偏好
+            applyUserPreferences();
         }
-        // 無論是否有現有 OAuth 用戶，都必須更新 UI（顯示「所有用戶」tab & 隱藏「管理員登入」按鈕）
-        updateUserUI(); // updateUserUI 內部會呼叫 updateAdminProjTab
+        saveAdminSession(); // 綁定至目前 sessionStorage 中的用戶（無論是 OAuth 還是 admin 身份）
+        updateUserUI(); // 更新 UI（顯示「所有用戶」tab、隱藏「個人設定」按鈕）
         closeModal('loginGateModal');
         openSettings();
     } else {
