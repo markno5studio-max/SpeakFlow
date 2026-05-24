@@ -44,7 +44,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .ni.active{background:rgba(var(--primary-rgb),.12);color:var(--primary);}
 
 /* user footer */
-.sb-foot{border-top:1px solid var(--border);}
+.sb-foot{border-top:1px solid var(--border);position:relative;z-index:100000;}
 .user-row{display:flex;align-items:center;gap:9px;padding:11px 12px;cursor:pointer;transition:var(--t);}
 .user-row:hover{background:rgba(255,255,255,.04);}
 .avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;background:rgba(255,255,255,.12);}
@@ -215,7 +215,8 @@ mark.fh{background:rgba(var(--primary-rgb),.22);color:var(--text-primary);paddin
 .repl-del:hover{color:var(--accent-red);background:rgba(240,96,96,.1);}
 
 /* ─── MODALS ─── */
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);z-index:10000;align-items:center;justify-content:center;}
+/* 所有 overlay modal 的 z-index 必須高於側欄頁尾（100000），以確保蓋在上方 */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(5px);z-index:100001;align-items:center;justify-content:center;}
 .overlay.show{display:flex;}
 .mbox{background:var(--bg-elevated);border:1px solid var(--border-hover);border-radius:var(--r-xl);padding:26px;width:90%;box-shadow:var(--shadow);}
 .mbox.sm{max-width:360px;}
