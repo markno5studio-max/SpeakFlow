@@ -485,7 +485,10 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <div class="user-sub" id="userSub">訪客模式</div>
             </div>
         </div>
-        <div class="sb-settings" id="settingsBtn"><i class="fas fa-gear"></i> 後台設定</div>
+        <div class="sb-settings" id="settingsBtn"><i class="fas fa-gear"></i> <span id="settingsBtnLabel">後台設定</span></div>
+        <div class="sb-settings" id="adminLoginBtn" onclick="showAdminLoginFromSidebar()" style="display:none;font-size:11.5px;padding:7px 12px;color:var(--text-tertiary);">
+            <i class="fas fa-shield-halved" style="font-size:11px;"></i> 管理員登入
+        </div>
     </div>
 </aside>
 
@@ -1215,6 +1218,12 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <div class="s-sec">
                     <div class="s-lbl">已核准名單 <span style="font-size:10px;font-weight:400;color:var(--text-tertiary);">（每行一個 Email，儲存後立即生效）</span></div>
                     <textarea class="fi" id="sApprovedEmails" rows="5" placeholder="user1@gmail.com&#10;user2@gmail.com" style="resize:vertical;font-family:monospace;font-size:12px;"></textarea>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">封鎖名單 <span style="font-size:10px;font-weight:400;color:var(--text-tertiary);">（每行一個 Email，列入後永久拒絕登入）</span></div>
+                    <textarea class="fi" id="sBlockedEmails" rows="3" placeholder="blocked@example.com&#10;spam@example.com" style="resize:vertical;font-family:monospace;font-size:12px;"></textarea>
+                    <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">封鎖優先於核准名單，被封鎖的帳號即使申請邀請碼也無法登入。</p>
                 </div>
                 <hr class="divider">
                 <div class="s-sec">
@@ -2748,9 +2757,9 @@ function isAdminUser() {
     try {
         const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
         if (!u) return false;
-        // 管理員旁路登入（provider=admin 且 session 有效）
-        if (u.provider === 'admin' && isAdminSessionValid()) return true;
-        // OAuth 帳號 email 與設定的管理員 email 相符
+        // 有效的管理員 session token（24h 密碼驗證，適用於任何身份的已登入用戶）
+        if (isAdminSessionValid()) return true;
+        // OAuth email 與設定的管理員 email 相符（免密碼管理員）
         const e = (u.email || '').toLowerCase().trim();
         const ae = (gs('adminEmail') || '').toLowerCase().trim();
         return ae && e === ae;
@@ -2814,6 +2823,8 @@ function findProjInCats(cats, projId) {
 
 let projView = 'all';
 function setProjView(v) {
+    // 安全閘門：非管理員不得進入「所有用戶」視圖
+    if (v === 'admin' && !isAdminUser()) { toast('需要管理員權限', 'err'); return; }
     projView = v;
     document.getElementById('projAllView').style.display   = v==='all'   ? '' : 'none';
     document.getElementById('projTrashView').style.display = v==='trash'  ? '' : 'none';
@@ -2825,10 +2836,22 @@ function setProjView(v) {
     else if (v==='admin') renderAdminAllProjects();
     else renderProjects();
 }
-// 顯示/隱藏管理員按鈕（依登入帳號決定）
+// 顯示/隱藏管理員按鈕 & 同步側欄狀態（依登入帳號 + admin session 決定）
 function updateAdminProjTab() {
+    const isAdmin = isAdminUser();
+    const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
+
+    // 「所有用戶」專案頁籤：只有管理員可見
     const btn = document.getElementById('projViewAdmin');
-    if (btn) btn.style.display = isAdminUser() ? '' : 'none';
+    if (btn) btn.style.display = isAdmin ? '' : 'none';
+
+    // 「管理員登入」側欄按鈕：有用戶登入但尚未取得管理員 session 時才顯示
+    const adminLoginBtn = document.getElementById('adminLoginBtn');
+    if (adminLoginBtn) adminLoginBtn.style.display = (u && !isAdminSessionValid()) ? '' : 'none';
+
+    // 側欄設定按鈕標籤：管理員 = 後台設定，一般用戶 = 個人設定
+    const lbl = document.getElementById('settingsBtnLabel');
+    if (lbl) lbl.textContent = isAdmin ? '後台設定' : (u ? '個人設定' : '後台設定');
 }
 
 function autoSaveProject() {
@@ -3424,9 +3447,8 @@ function doAuthAdminBypass() {
         const stored = { name: user, email: adminEmail, provider: 'admin', color: '#d4a254' };
         sessionStorage.setItem('vf_user', JSON.stringify(stored));
         applyRememberPreference(stored);
-        updateUserUI();
+        updateUserUI(); // updateUserUI 內部呼叫 updateAdminProjTab
         document.getElementById('authGate').classList.remove('show');
-        updateAdminProjTab();
         openSettings();
         const oauthConfigured = !!(gs('googleClientId') || gs('facebookAppId'));
         if (oauthConfigured) {
@@ -3566,32 +3588,51 @@ function doFacebookLogin() {
 
 // ── 統一 OAuth 登入完成處理（訪客管制閘門）──
 function doOAuthLogin(userData) {
-    if (gs('accessControl') === 'true') {
-        const email = (userData.email || '').trim().toLowerCase();
-        const approved = (gs('approvedEmails') || '')
-            .split('\n').map(e => e.trim().toLowerCase()).filter(Boolean);
-        if (approved.includes(email)) {
-            // 已核准 → 直接登入
-            doOAuthLoginDirect(userData);
-        } else {
-            // 未核准 → 顯示等候審核畫面並通知管理者
-            pendingUser = userData;
-            addPending(userData);
-            const oauthBlock = document.getElementById('agOAuthBlock');
-            const pendingDiv = document.getElementById('agPending');
-            const errDiv     = document.getElementById('agErr');
-            if (oauthBlock) oauthBlock.style.display = 'none';
-            if (errDiv)     errDiv.style.display     = 'none';
-            if (pendingDiv) pendingDiv.style.display  = 'block';
-            // 設定待審核訊息（顯示使用者名稱）
-            const msgEl = document.getElementById('agPendingMsg');
-            if (msgEl) msgEl.innerHTML = `<strong>${esc(userData.name)}</strong>（${esc(userData.email)}）<br>您的帳號需要管理者審核後才能使用。<br>系統已通知管理者，請耐心等候，或向管理者索取邀請碼。`;
-            sendApprovalEmail(userData, makeInviteCode(userData.email));
-        }
-    } else {
-        // 未啟用訪客管制 → 直接登入
-        doOAuthLoginDirect(userData);
+    const email = (userData.email || '').trim().toLowerCase();
+
+    // ① 黑名單優先檢查：被封鎖的帳號直接拒絕，無法申請邀請碼
+    const blocked = (gs('blockedEmails') || '').split('\n').map(e => e.trim().toLowerCase()).filter(Boolean);
+    if (blocked.includes(email)) {
+        showAgErr(`此帳號（${userData.email}）已被管理員封鎖，無法登入。`);
+        return;
     }
+
+    // ② 未啟用訪客管制 → 全開放
+    if (gs('accessControl') !== 'true') {
+        doOAuthLoginDirect(userData); return;
+    }
+
+    // ③ 已核准名單（approvedEmails）→ 直接登入（包含第一次審核通過後的所有回訪）
+    const approved = (gs('approvedEmails') || '').split('\n').map(e => e.trim().toLowerCase()).filter(Boolean);
+    if (approved.includes(email)) {
+        doOAuthLoginDirect(userData); return;
+    }
+
+    // ④ 曾經成功登入過（vf_user_index 有記錄）→ 視為已核准，自動補入名單並登入
+    //    （管理員可從名單移除 + 加入黑名單來永久阻止）
+    try {
+        const idx = JSON.parse(localStorage.getItem('vf_user_index') || '{}');
+        const h = spHash(email);
+        if (idx[h]) {
+            // 重新加入核准名單（確保下次更快）
+            approved.push(email);
+            ss('approvedEmails', approved.join('\n'));
+            doOAuthLoginDirect(userData); return;
+        }
+    } catch(e2) {}
+
+    // ⑤ 全新用戶且尚未核准 → 顯示等候審核畫面並通知管理者
+    pendingUser = userData;
+    addPending(userData);
+    const oauthBlock = document.getElementById('agOAuthBlock');
+    const pendingDiv = document.getElementById('agPending');
+    const errDiv     = document.getElementById('agErr');
+    if (oauthBlock) oauthBlock.style.display = 'none';
+    if (errDiv)     errDiv.style.display     = 'none';
+    if (pendingDiv) pendingDiv.style.display  = 'block';
+    const msgEl = document.getElementById('agPendingMsg');
+    if (msgEl) msgEl.innerHTML = `<strong>${esc(userData.name)}</strong>（${esc(userData.email)}）<br>您的帳號需要管理者審核後才能使用。<br>系統已通知管理者，請耐心等候，或向管理者索取邀請碼。`;
+    sendApprovalEmail(userData, makeInviteCode(userData.email));
 }
 
 // ── 實際執行登入（寫入 sessionStorage、更新 UI）──
@@ -3613,9 +3654,8 @@ function doOAuthLoginDirect(userData) {
     registerUserInIndex(userData); // 登記至管理員使用者索引
     applyRememberPreference(stored); // 套用 remember-me / 自動登出設定
     applyUserPreferences(); // 套用此帳號的個人偏好（色彩、TC 格式、FPS）
-    updateUserUI();
+    updateUserUI(); // updateUserUI 內部呼叫 updateAdminProjTab
     hideAuthGate();
-    updateAdminProjTab(); // 管理員帳號登入後顯示「所有用戶」頁籤
     const errDiv = document.getElementById('agErr');
     if (errDiv) errDiv.style.display = 'none';
     toast(`歡迎，${stored.name}！（${stored.provider} 帳號）`, 'ok');
@@ -3726,6 +3766,16 @@ function updateUserUI() {
         nm.textContent = '點擊登入';
         sb.textContent = '訪客模式';
     }
+    updateAdminProjTab(); // 同步側欄管理員按鈕與標籤
+}
+
+// ── 側欄「管理員登入」按鈕：開啟管理員密碼驗證 ──
+function showAdminLoginFromSidebar() {
+    document.getElementById('gateUser').value = '';
+    document.getElementById('gatePass').value = '';
+    document.getElementById('gateErr').style.display = 'none';
+    document.getElementById('loginGateModal').classList.add('show');
+    setTimeout(() => document.getElementById('gateUser').focus(), 80);
 }
 
 // ══════════════════════════════════════════
@@ -3780,12 +3830,13 @@ function doAdminLogin() {
         const adminEmail = gs('adminEmail') || (u + '@admin.local');
         const stored = { name: u, email: adminEmail, provider: 'admin', color: '#d4a254' };
         if (!sessionStorage.getItem('vf_user')) {
+            // 純管理員旁路登入（沒有現有 OAuth 身份）
             sessionStorage.setItem('vf_user', JSON.stringify(stored));
             applyRememberPreference(stored);
             applyUserPreferences(); // 套用管理員帳號個人偏好
-            updateUserUI();
-            updateAdminProjTab();
         }
+        // 無論是否有現有 OAuth 用戶，都必須更新 UI（顯示「所有用戶」tab & 隱藏「管理員登入」按鈕）
+        updateUserUI(); // updateUserUI 內部會呼叫 updateAdminProjTab
         closeModal('loginGateModal');
         openSettings();
     } else {
@@ -3796,8 +3847,9 @@ function doAdminLogin() {
 
 function adminLogout() {
     clearAdminSession();
+    updateUserUI(); // 同步側欄：重新顯示「管理員登入」按鈕、隱藏「所有用戶」頁籤
     closeModal('settingsModal');
-    toast('已登出後台', 'ok');
+    toast('已登出後台管理', 'ok');
 }
 
 function openSettings() {
@@ -3840,6 +3892,8 @@ function openSettings() {
     if (ejsK) ejsK.value = gs('ejsKey') || '';
     const apEl = document.getElementById('sApprovedEmails');
     if (apEl) apEl.value = gs('approvedEmails') || '';
+    const blEl = document.getElementById('sBlockedEmails');
+    if (blEl) blEl.value = gs('blockedEmails') || '';
     renderPendingList();
     // sync all CPWs with saved values
     document.querySelectorAll('.cpw[data-key]').forEach(cpw=>syncCPW(cpw, gs(cpw.dataset.key)));
@@ -3918,6 +3972,8 @@ function saveSettings() {
     if (ejsK) ss('ejsKey', ejsK.value.trim());
     const apEl = document.getElementById('sApprovedEmails');
     if (apEl) ss('approvedEmails', apEl.value);
+    const blEl2 = document.getElementById('sBlockedEmails');
+    if (blEl2) ss('blockedEmails', blEl2.value);
     // save all color CPWs
     document.querySelectorAll('.cpw[data-key]').forEach(cpw=>{
         const hex=cpw.querySelector('.cpw-native').value;
@@ -4017,7 +4073,9 @@ function applyRememberPreference(userData) {
         if (timeoutMins === -1) timeoutMins = globalTimeout;
     }
 
-    if (timeoutMins === -1) return; // user hasn't set preference, use default (sessionStorage only)
+    // 預設：永不過期（expiry=0），用戶可在個人設定中改為定時登出
+    // 管理員的全局逾時設定優先覆蓋個人設定
+    if (timeoutMins === -1) timeoutMins = 0;
 
     // Save remember session to localStorage
     const remKey = 'vf_remember_' + hash;
