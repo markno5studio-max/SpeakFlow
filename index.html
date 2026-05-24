@@ -620,6 +620,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
         <div class="proj-nav">
             <button class="proj-nav-btn active" id="projViewAll" onclick="setProjView('all')"><i class="fas fa-layer-group"></i> 全部專案</button>
             <button class="proj-nav-btn" id="projViewTrash" onclick="setProjView('trash')"><i class="fas fa-trash-can"></i> 垃圾桶</button>
+            <button class="proj-nav-btn" id="projViewAdmin" onclick="setProjView('admin')" style="display:none;"><i class="fas fa-users"></i> 所有用戶</button>
             <button class="btn" style="margin-left:auto;padding:5px 12px;font-size:12px;" onclick="addCategory()"><i class="fas fa-plus"></i> 新增項目</button>
             <select class="fs" id="trashDaysSelect" style="width:auto;font-size:12px;padding:5px 8px;" onchange="saveTrashDays(this.value)">
                 <option value="15">垃圾桶保留 15 天</option>
@@ -634,6 +635,14 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <p style="font-size:12px;color:var(--text-secondary);">超過保留天數的專案將自動永久刪除。</p>
             </div>
             <div id="trashGrid"></div>
+        </div>
+        <!-- 管理員：所有用戶專案總覽 -->
+        <div id="projAdminView" style="display:none;">
+            <div class="ph" style="margin-bottom:14px;">
+                <h3 style="font-size:14px;font-weight:700;"><i class="fas fa-users" style="margin-right:6px;color:var(--primary);"></i>所有用戶專案</h3>
+                <p style="font-size:12px;color:var(--text-secondary);">以下列出所有已登入過本系統的帳號及其專案（僅管理員可見）。</p>
+            </div>
+            <div id="adminAllGrid"></div>
         </div>
     </section>
 
@@ -654,7 +663,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <span style="color:rgba(255,255,255,.15);font-size:12px;">媒體預覽區域</span>
                     </div>
                     <!-- 重新載入音訊（開啟舊專案時顯示）-->
-                    <div id="reloadAudioZone" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(11,11,15,.88);border-radius:var(--r-lg);z-index:10;">
+                    <div id="reloadAudioZone" style="display:none;position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(11,11,15,.9);border-radius:var(--r-lg);z-index:100;">
                         <i class="fas fa-file-audio" style="font-size:28px;color:var(--primary);"></i>
                         <div style="font-size:13px;font-weight:700;color:var(--text-primary);">載入音訊以啟用播放</div>
                         <div style="font-size:11.5px;color:var(--text-secondary);">逐字稿已還原，請重新選擇同一音訊檔</div>
@@ -679,6 +688,11 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     <div class="sub-ov" id="subOv"></div>
                 </div>
                 <!-- 播放控制列 -->
+                <!-- 開啟舊專案時的重載音訊提示（在播放列旁顯示）-->
+                <div id="razPlayBarBtn" style="display:none;padding:4px 8px;background:rgba(74,124,247,.12);border:1px solid rgba(74,124,247,.3);border-radius:6px;margin:4px 0;font-size:11.5px;color:#7aaaf8;display:none;align-items:center;gap:8px;cursor:pointer;" onclick="document.getElementById('editorAudioInput2').click()">
+                    <i class="fas fa-file-audio"></i> 點擊選擇音訊/影片以啟用播放
+                    <input type="file" id="editorAudioInput2" accept="audio/*,video/*" style="display:none" onchange="loadEditorAudio(this.files[0])">
+                </div>
                 <div class="play-bar">
                     <button class="play-btn" id="playPauseBtn" onclick="togglePlay()" title="播放/暫停"><i class="fas fa-play" id="playIcon"></i></button>
                     <button class="play-btn" onclick="skipMedia(-5)" title="倒退5秒"><i class="fas fa-backward-step"></i></button>
@@ -1290,7 +1304,7 @@ let tcFormat = localStorage.getItem('vf_tc_format') || '8'; // '8'=SMPTE HH:MM:S
 (function earlyAuthCheck() {
     try {
         localStorage.removeItem('vf_auth_bypass');
-        const raw = localStorage.getItem('vf_user');
+        const raw = sessionStorage.getItem('vf_user');
         if (raw) {
             const u = JSON.parse(raw);
             if (u && u.name) {
@@ -1496,7 +1510,7 @@ function setupNav() {
             document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
             item.classList.add('active');
             document.getElementById(item.dataset.sec).classList.add('active');
-            if(item.dataset.sec==='projects') renderProjects();
+            if(item.dataset.sec==='projects') { updateAdminProjTab(); renderProjects(); }
         };
     });
 }
@@ -2110,7 +2124,8 @@ async function runLocalTranscription(lt) {
     const maxCh = document.getElementById('maxChars').value;
     const whisperLang = WHISPER_LANG[langCode] || 'zh';
     lt.textContent = `Whisper 本地辨識中（語言：${LANG_DISPLAY[langCode]}，依音訊長度可能需數分鐘）...`;
-    const opts = { chunk_length_s: 30, stride_length_s: 6, language: whisperLang, task: 'transcribe', return_timestamps: true, sampling_rate: 16000, num_beams: 1 };
+    // num_beams:1 = greedy（最快）；stride_length_s 縮短減少重疊運算；chunk_length_s 30s 平衡速度與品質
+    const opts = { chunk_length_s: 30, stride_length_s: 3, language: whisperLang, task: 'transcribe', return_timestamps: true, sampling_rate: 16000, num_beams: 1 };
     let result;
     try {
         result = await transcriber(audioData, opts);
@@ -2164,29 +2179,26 @@ async function runGeminiTranscription(model, lt) {
     const langName = LANG_DISPLAY[langCode] || langCode;
     const isTW = langCode === 'zh-TW';
 
-    const twRule = isTW ? `
-【繁體中文強制規則】
-- 每一個漢字必須使用台灣正體字（繁體）。
-- 以下簡體字絕對禁止出現：为/这/来/时/说/国/会/个/们/么/问/过/还/给/从/里/电/话/学/语/计/机/网/视/频/经/记/设/备/报/场/间/样/词/关/组/级/来/带/当/对/发/开/体/书/长/声/师/数/树/听/头/图/团/无/写/选/业/议/应/远/运/员/战/证/质/终/众/专/准/兰/约/软/红/蓝/绿/灯/错/档/积/监/将/奖/劳/乱/满/梦/脑/评/气/热/试/税/习/异/预/鸡/历/厂/齿/虫/聪/达/胆/弹/导/夺/该/规/柜/坏/几/继/竞/龙/买/卖/迁/亲/认/随/铁/员/张/着/着/专/规/观/产/历/进/见/经/两/说/时/问/为/现/些/样/这/种/知/里
-- 請特別注意：蘭不是兰、會不是会、來不是来、時不是时、為不是为、這不是这、說不是说、國不是国、個不是个。` : '';
+    // 繁體中文規則（精簡版，減少 token 消耗以加快回應速度）
+    const twRule = isTW ? '\n【語言】全程使用台灣繁體正體字，禁止出現任何簡體字。' : '';
 
-    const prompt = `你是頂尖的專業語音辨識與字幕製作 AI，任務是精確還原音訊中的口語內容。
-${twRule}
-【核心規則 — 違反即失敗】
-1. 目標語言：${langName}。${isTW ? '所有輸出漢字必須為繁體正體字（台灣用法）。' : ''}
-2. 斷句：每行最多 ${maxCh} 字，依語意與停頓自然斷句，不可截斷詞彙。
-3. 【禁止重複】嚴格禁止重複相同句子或詞語。若同一段話已出現，下一段必須是新內容。
-4. 【禁止幻覺】只輸出音訊中真實發出的聲音所對應的文字。雜音/不清楚請標記 [不清楚] 而非捏造。
-5. 時間戳記：${wantTime ? '每段精準的開始與結束時間，格式 HH:MM:SS,mmm（例 00:00:05,240）' : '不需要，start/end 填空字串'}。
-6. 說話者：${wantDiar ? '依聲音特徵標示 Speaker A/B 等' : '不需要，speaker 填空字串'}。
-7. 章節：${wantChap ? '分析出有意義的章節，格式 {"time":"00:00","title":"章節名"}' : '不需要，chapters 回傳 []'}。
-8. 【JSON格式】只能輸出合法 JSON，禁止任何 markdown、說明或多餘文字。
-
-輸出格式：{"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"大家好，歡迎來到今天的節目。"}],"chapters":[]}`;
+    const prompt = `你是專業語音辨識 AI，精確還原音訊口語內容。${twRule}
+【規則】
+1. 語言：${langName}。每段最多 ${maxCh} 字，依語意斷句。
+2. 禁止重複相同句子；僅輸出音訊中真實的聲音。
+3. 時間戳記：${wantTime ? 'HH:MM:SS,mmm（例 00:00:05,240）' : 'start/end 填空字串'}。
+4. 說話者：${wantDiar ? 'Speaker A/B 等' : 'speaker 填空字串'}。
+5. 章節：${wantChap ? '{"time":"MM:SS","title":"名稱"}' : 'chapters:[]'}。
+6. 只輸出純 JSON，無任何 markdown 或說明。
+格式：{"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容"}],"chapters":[]}`;
 
     const payload = {
         contents: [{ parts: [{ text: prompt }, audioPart] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 65536 }
+        generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 65536,
+            responseMimeType: 'application/json'  // JSON 模式：加快回應 + 減少格式錯誤
+        }
     };
 
     lt.textContent = `${modelLabel} 辨識中，請稍候（大型音訊可能需 1～3 分鐘）...`;
@@ -2201,7 +2213,7 @@ ${twRule}
         if (!sseResp.ok) {
             const eb = await sseResp.json().catch(() => ({}));
             const c = eb?.error?.code || sseResp.status;
-            if (c === 429) throw new Error('API 呼叫達上限（429 Rate Limit）。請稍後再試或升級使用額度。');
+            if (c === 429) throw new Error('API 呼叫達上限（429 Rate Limit）。\n\n可能原因：\n① Gemini 2.5 Pro 需要付費方案（免費方案額度極低）\n② 請改用「Gemini 2.5 Flash」模型（速度更快、免費額度充足）\n③ 若已付費，請稍候 1 分鐘後重試。');
             if (c === 403) throw new Error('API 金鑰無效或無存取權限（403）。請至後台設定確認 Gemini API 金鑰。');
             throw new Error(eb?.error?.message || `HTTP ${sseResp.status}`);
         }
@@ -2221,7 +2233,7 @@ ${twRule}
                 try {
                     const chunk = JSON.parse(d);
                     if (chunk.error) {
-                        if (chunk.error.code === 429) throw new Error('API 呼叫達上限，請稍後再試。');
+                        if (chunk.error.code === 429) throw new Error('API 呼叫達上限（Rate Limit）。請改用 Gemini 2.5 Flash 或稍候重試。');
                         throw new Error(chunk.error.message);
                     }
                     const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -2246,7 +2258,7 @@ ${twRule}
         if (!stdResp.ok) {
             const eb = await stdResp.json().catch(() => ({}));
             const c = eb?.error?.code || stdResp.status;
-            if (c === 429) throw new Error('API 呼叫達上限（429 Rate Limit）。請稍後再試。');
+            if (c === 429) throw new Error('API 呼叫達上限（429 Rate Limit）。請改用 Gemini 2.5 Flash 模型，或稍候重試。');
             if (c === 403) throw new Error('API 金鑰無效（403）。請至後台設定確認 Gemini API 金鑰。');
             throw new Error(eb?.error?.message || `HTTP ${stdResp.status}`);
         }
@@ -2482,17 +2494,69 @@ function renderResults() {
 // ══════════════════════════════════════════
 // 專案管理（項目 › 資料夾 › 專案）
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+// 使用者專屬儲存 key（每個帳號獨立資料夾）
+// ══════════════════════════════════════════
+function getCurrentUserEmail() {
+    try {
+        const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
+        return (u?.email || '').toLowerCase().trim();
+    } catch { return ''; }
+}
+function getUserCatsKey() {
+    const e = getCurrentUserEmail();
+    return e ? 'vf_cats_' + spHash(e) : 'vf_cats';
+}
+function getUserTrashKey() {
+    const e = getCurrentUserEmail();
+    return e ? 'vf_trash_' + spHash(e) : 'vf_trash';
+}
+// 是否為管理員（可看到所有人的專案）
+function isAdminUser() {
+    if (isAdminSessionValid()) return true;
+    const e = getCurrentUserEmail();
+    if (!e) return false;
+    const ae = (gs('adminEmail') || '').toLowerCase().trim();
+    return ae && e === ae;
+}
+// 登入時將使用者登記到索引（供管理員查閱所有帳號）
+function registerUserInIndex(userData) {
+    try {
+        const idx = JSON.parse(localStorage.getItem('vf_user_index') || '{}');
+        const h = spHash((userData.email || '').toLowerCase().trim());
+        idx[h] = { email: userData.email, name: userData.name, lastLogin: new Date().toISOString() };
+        localStorage.setItem('vf_user_index', JSON.stringify(idx));
+    } catch(e) {}
+}
+
 function getCategories() {
-    const raw = localStorage.getItem('vf_cats');
+    const key = getUserCatsKey();
+    const raw = localStorage.getItem(key);
     if (raw) { try { return JSON.parse(raw); } catch{} }
-    // 首次：從舊版 vf_projects 遷移
-    const old = JSON.parse(localStorage.getItem('vf_projects')||'[]');
-    const cats = [{ id:Date.now(), name:'未分類', open:true, folders:[{ id:Date.now()+1, name:'主要', open:true, projects:old }] }];
+    // 首次登入此帳號：嘗試從舊版公共 vf_cats 遷移（只遷移給第一位使用者）
+    if (key !== 'vf_cats') {
+        const oldRaw = localStorage.getItem('vf_cats');
+        if (oldRaw && !localStorage.getItem('vf_cats_migrated')) {
+            try {
+                const cats = JSON.parse(oldRaw);
+                localStorage.setItem(key, oldRaw);
+                localStorage.setItem('vf_cats_migrated', '1'); // 標記已遷移
+                return cats;
+            } catch {}
+        }
+    } else {
+        // 未登入 / 訪客：沿用舊版 vf_projects
+        const old = JSON.parse(localStorage.getItem('vf_projects')||'[]');
+        const cats = [{ id:Date.now(), name:'未分類', open:true, folders:[{ id:Date.now()+1, name:'主要', open:true, projects:old }] }];
+        saveCats(cats); return cats;
+    }
+    // 全新帳號：建立空結構
+    const cats = [{ id:Date.now(), name:'未分類', open:true, folders:[{ id:Date.now()+1, name:'主要', open:true, projects:[] }] }];
     saveCats(cats); return cats;
 }
-function saveCats(cats){ localStorage.setItem('vf_cats',JSON.stringify(cats)); }
-function getTrash(){ return JSON.parse(localStorage.getItem('vf_trash')||'[]'); }
-function saveTrash(t){ localStorage.setItem('vf_trash',JSON.stringify(t)); }
+function saveCats(cats){ localStorage.setItem(getUserCatsKey(), JSON.stringify(cats)); }
+function getTrash(){ return JSON.parse(localStorage.getItem(getUserTrashKey())||'[]'); }
+function saveTrash(t){ localStorage.setItem(getUserTrashKey(), JSON.stringify(t)); }
 function getTrashDays(){ return parseInt(localStorage.getItem('vf_trash_days')||'30'); }
 function saveTrashDays(v){ localStorage.setItem('vf_trash_days',v); }
 
@@ -2514,11 +2578,20 @@ function findProjInCats(cats, projId) {
 let projView = 'all';
 function setProjView(v) {
     projView = v;
-    document.getElementById('projAllView').style.display  = v==='all'  ? '' : 'none';
-    document.getElementById('projTrashView').style.display= v==='trash' ? '' : 'none';
-    document.getElementById('projViewAll').classList.toggle('active', v==='all');
+    document.getElementById('projAllView').style.display   = v==='all'   ? '' : 'none';
+    document.getElementById('projTrashView').style.display = v==='trash'  ? '' : 'none';
+    document.getElementById('projAdminView').style.display = v==='admin'  ? '' : 'none';
+    document.getElementById('projViewAll').classList.toggle('active',   v==='all');
     document.getElementById('projViewTrash').classList.toggle('active', v==='trash');
-    if (v==='trash') renderTrash(); else renderProjects();
+    document.getElementById('projViewAdmin').classList.toggle('active', v==='admin');
+    if (v==='trash') renderTrash();
+    else if (v==='admin') renderAdminAllProjects();
+    else renderProjects();
+}
+// 顯示/隱藏管理員按鈕（依登入帳號決定）
+function updateAdminProjTab() {
+    const btn = document.getElementById('projViewAdmin');
+    if (btn) btn.style.display = isAdminUser() ? '' : 'none';
 }
 
 function autoSaveProject() {
@@ -2603,6 +2676,42 @@ function renderProjects() {
     </div>`).join('');
 }
 
+// ── 管理員：所有用戶的專案總覽 ──
+function renderAdminAllProjects() {
+    const grid = document.getElementById('adminAllGrid');
+    if (!grid) return;
+    try {
+        const idx = JSON.parse(localStorage.getItem('vf_user_index') || '{}');
+        const entries = Object.entries(idx);
+        if (!entries.length) {
+            grid.innerHTML = '<div class="empty-state"><i class="fas fa-users"></i><h3>尚無用戶記錄</h3><p>用戶首次登入後將顯示於此。</p></div>';
+            return;
+        }
+        let html = '';
+        for (const [h, info] of entries) {
+            const catsRaw = localStorage.getItem('vf_cats_' + h);
+            const cats = catsRaw ? (JSON.parse(catsRaw) || []) : [];
+            const total = cats.reduce((a,c)=>a+c.folders.reduce((b,f)=>b+f.projects.length,0),0);
+            const trashRaw = localStorage.getItem('vf_trash_' + h);
+            const trashCnt = trashRaw ? (JSON.parse(trashRaw)||[]).length : 0;
+            html += `<div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
+                <div style="width:36px;height:36px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;">${esc((info.name||'?')[0].toUpperCase())}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:700;color:var(--text-primary);">${esc(info.name||'未知')}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);">${esc(info.email)} · 最後登入：${info.lastLogin ? new Date(info.lastLogin).toLocaleDateString('zh-TW') : '—'}</div>
+                </div>
+                <div style="text-align:right;flex-shrink:0;">
+                    <div style="font-size:12px;font-weight:700;color:var(--primary);">${total} 個專案</div>
+                    <div style="font-size:10.5px;color:var(--text-tertiary);">垃圾桶 ${trashCnt} 筆</div>
+                </div>
+            </div>`;
+        }
+        grid.innerHTML = html;
+    } catch(e) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>載入失敗</h3></div>';
+    }
+}
+
 function renderTrash() {
     cleanTrash();
     const trash = getTrash();
@@ -2680,6 +2789,9 @@ function loadProject(id) {
     if (mc) mc.innerHTML = '<span style="color:rgba(255,255,255,.15);font-size:12px;">媒體預覽區域</span>';
     const raz = document.getElementById('reloadAudioZone');
     if (raz) raz.style.display = 'flex';
+    // 播放列旁的重載提示按鈕（比覆蓋層更明顯）
+    const razBtn = document.getElementById('razPlayBarBtn');
+    if (razBtn) razBtn.style.display = 'flex';
     waveformData = null; stopWaveAnim();
     const ww = document.getElementById('waveWrap');
     if (ww) ww.style.display = 'none';
@@ -2689,31 +2801,43 @@ function loadProject(id) {
     _undoStack = []; // 切換專案時清空還原堆疊
     renderResults();
     goSection('subtitleEditor');
-    toast(`已載入：${p.name}（請重新選擇音訊以啟用播放）`, 'ok');
+    toast(`已載入：${p.name}（請點擊「選擇音訊/影片」以啟用播放）`, 'ok');
 }
 
 // ── 編輯器中重新載入音訊（不觸發重新轉錄）──
 function loadEditorAudio(file) {
     if (!file) return;
     currentFile = file;
+
+    // 重置 file input，允許重複選擇同一檔案（否則 onchange 不觸發）
+    const inp = document.getElementById('editorAudioInput');
+    if (inp) inp.value = '';
+
+    // 隱藏覆蓋層
     const raz = document.getElementById('reloadAudioZone');
     if (raz) raz.style.display = 'none';
+
+    // 隱藏播放列中的重載提示按鈕
+    const razBtn = document.getElementById('razPlayBarBtn');
+    if (razBtn) razBtn.style.display = 'none';
+
     const url = URL.createObjectURL(file);
     const mc  = document.getElementById('mediaContainer');
+    if (!mc) { toast('媒體容器找不到，請重新整理頁面', 'err'); return; }
     mc.innerHTML = '';
     let el;
     if (file.type.startsWith('video/')) {
         el = document.createElement('video');
         el.controls = true;
-        el.style.cssText = 'max-width:100%;max-height:100%;';
+        el.style.cssText = 'max-width:100%;max-height:100%;display:block;';
     } else {
         el = document.createElement('audio');
         el.controls = true;
-        el.style.cssText = 'width:88%;margin:auto;';
+        el.style.cssText = 'width:90%;margin:auto;display:block;margin-top:12px;';
     }
     el.src = url;
     el.onloadedmetadata = () => { audioDuration = el.duration; initSeekBar(el); };
-    el.ontimeupdate = () => { updateLiveSub(el.currentTime); updateSeekBar(el); };
+    el.ontimeupdate    = () => { updateLiveSub(el.currentTime); updateSeekBar(el); };
     el.onended = () => {
         const pi = document.getElementById('playIcon');
         if (pi) pi.className = 'fas fa-play';
@@ -2725,9 +2849,12 @@ function loadEditorAudio(file) {
     };
     currentMedia = el;
     mc.appendChild(el);
+
     waveformData = null; stopWaveAnim();
-    document.getElementById('waveWrap').style.display = 'none';
-    document.querySelector('.play-bar').classList.remove('has-wave');
+    const ww = document.getElementById('waveWrap');
+    if (ww) ww.style.display = 'none';
+    const pb = document.querySelector('.play-bar');
+    if (pb) pb.classList.remove('has-wave');
     buildWaveform(file);
     toast('音訊已載入，可開始播放與同步編輯', 'ok');
 }
@@ -2890,7 +3017,7 @@ function checkAuth() {
     localStorage.removeItem('vf_auth_bypass'); // 清除舊旁路 token
 
     try {
-        const raw = localStorage.getItem('vf_user');
+        const raw = sessionStorage.getItem('vf_user');
         if (raw) {
             const u = JSON.parse(raw);
             // ① 已透過 OAuth（Gmail / Facebook）登入 → 維持登入狀態
@@ -2898,7 +3025,7 @@ function checkAuth() {
         }
     } catch(e) {
         // vf_user 損壞 → 清除並重新登入
-        localStorage.removeItem('vf_user');
+        sessionStorage.removeItem('vf_user');
     }
 
     // ② 未登入 → 顯示登入牆（OAuth 未設定時提示管理員入口）
@@ -2908,6 +3035,16 @@ function checkAuth() {
 function showAuthGate() {
     const gate = document.getElementById('authGate');
     gate.classList.add('show');
+
+    // ── 重置所有子面板狀態（防止 doOAuthLogin 隱藏的 agOAuthBlock 殘留）──
+    const agOAuthBlockEl = document.getElementById('agOAuthBlock');
+    if (agOAuthBlockEl) agOAuthBlockEl.style.display = '';   // 恢復 CSS 預設（block）
+    const agPendingEl = document.getElementById('agPending');
+    if (agPendingEl) agPendingEl.style.display = '';         // CSS 預設是 display:none，重置即隱藏
+    const agInviteInp = document.getElementById('agInviteInput');
+    if (agInviteInp) agInviteInp.value = '';
+    const agInviteErr = document.getElementById('agInviteErr');
+    if (agInviteErr) agInviteErr.style.display = 'none';
 
     // 同步站名
     const sn = document.getElementById('agSiteName');
@@ -3152,7 +3289,7 @@ function doOAuthLogin(userData) {
     }
 }
 
-// ── 實際執行登入（寫入 localStorage、更新 UI）──
+// ── 實際執行登入（寫入 sessionStorage、更新 UI）──
 function doOAuthLoginDirect(userData) {
     const stored = {
         name: userData.name,
@@ -3161,9 +3298,11 @@ function doOAuthLoginDirect(userData) {
         provider: userData.provider,
         color: avatarColor(userData.email || userData.name)
     };
-    localStorage.setItem('vf_user', JSON.stringify(stored));
+    sessionStorage.setItem('vf_user', JSON.stringify(stored));
+    registerUserInIndex(userData); // 登記至管理員使用者索引
     updateUserUI();
     hideAuthGate();
+    updateAdminProjTab(); // 管理員帳號登入後顯示「所有用戶」頁籤
     const errDiv = document.getElementById('agErr');
     if (errDiv) errDiv.style.display = 'none';
     toast(`歡迎，${stored.name}！（${stored.provider} 帳號）`, 'ok');
@@ -3171,7 +3310,7 @@ function doOAuthLoginDirect(userData) {
 
 // ── 點擊側欄使用者列 → 顯示帳號資訊彈窗 ──
 function openLogin() {
-    const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
+    const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
     if (!u) { showAuthGate(); return; }
     // 顯示帳號資訊
     const av = document.getElementById('modalUserAvatar');
@@ -3197,8 +3336,9 @@ function doLogout() {
     if (typeof FB !== 'undefined') {
         try { FB.getLoginStatus(r => { if (r.status==='connected') FB.logout(()=>{}); }); } catch(e) {}
     }
-    localStorage.removeItem('vf_user');
+    sessionStorage.removeItem('vf_user');
     localStorage.removeItem('vf_auth_bypass'); // 同時清除管理員旁路
+    pendingUser = null; // 清除待審核狀態
     updateUserUI();
     closeModal('loginModal');
     toast('已成功登出', 'ok');
@@ -3206,7 +3346,7 @@ function doLogout() {
 }
 
 function updateUserUI() {
-    const u = JSON.parse(localStorage.getItem('vf_user') || 'null');
+    const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
     const av = document.getElementById('userAvatar');
     const nm = document.getElementById('userName');
     const sb = document.getElementById('userSub');
@@ -3806,12 +3946,16 @@ function secsToSRT(t) {
 }
 function formatTC(srtStr) {
     if (!srtStr) return '--:--:--:--';
+    const t = srtToSecs(srtStr); // 統一轉成秒數再格式化，避免原始字串格式不一
     if (tcFormat === '9') {
-        // 9碼 SRT HH:MM:SS,mmm
-        return srtStr.includes(',') ? srtStr : srtStr.replace('.', ',');
+        // 9碼 SRT HH:MM:SS,mmm（永遠補足三位毫秒，解決 7 碼顯示問題）
+        const h  = Math.floor(t / 3600);
+        const m  = Math.floor((t % 3600) / 60);
+        const s  = Math.floor(t % 60);
+        const ms = Math.round((t % 1) * 1000);
+        return `${p2(h)}:${p2(m)}:${p2(s)},${String(ms).padStart(3, '0')}`;
     }
     // 8碼 SMPTE HH:MM:SS:FF (30fps)
-    const t = srtToSecs(srtStr);
     const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60), ff=Math.floor((t%1)*30);
     return `${p2(h)}:${p2(m)}:${p2(s)}:${p2(ff)}`;
 }
