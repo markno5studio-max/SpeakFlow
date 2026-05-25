@@ -486,12 +486,12 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <div class="user-sub" id="userSub">訪客模式</div>
             </div>
         </div>
-        <!-- 後台設定：永遠可見，所有人都看得到，點擊後需管理員密碼 -->
-        <div class="sb-settings" id="settingsBtn"><i class="fas fa-gear"></i> 後台設定</div>
-        <!-- 個人設定：只有非管理員的已登入用戶才顯示 -->
-        <div class="sb-settings" id="userPrefsBtn" onclick="openUserSettings()" style="display:none;font-size:11.5px;padding:7px 12px;">
+        <!-- 個人設定：固定在上方，永遠顯示 -->
+        <div class="sb-settings" id="userPrefsBtn" onclick="openUserSettings()" style="font-size:11.5px;padding:7px 12px;">
             <i class="fas fa-sliders" style="font-size:11px;"></i> 個人設定
         </div>
+        <!-- 後台設定：固定在下方，永遠可見，點擊後需管理員密碼 -->
+        <div class="sb-settings" id="settingsBtn"><i class="fas fa-gear"></i> 後台設定</div>
     </div>
 </aside>
 
@@ -577,6 +577,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <option value="base">Whisper Base (~141MB) · 輕量均衡</option>
                         <option value="small">Whisper Small (~483MB) · 繁中/英/日多語言高精度</option>
                         <option value="medium">Whisper Medium (~1.5GB) · 最高精準度（需 4GB+ RAM）</option>
+                        <option value="large-v3">OpenAI Whisper Large-v3 (~3GB) · 極致精準，99種語言（需 8GB+ RAM）</option>
                     </select>
                 </div>
                 <div class="model-status ms-idle" id="modelStatusBar">
@@ -1152,6 +1153,8 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <option value="Xenova/whisper-tiny">Whisper Tiny（約 75MB，速度最快）</option>
                         <option value="Xenova/whisper-base">Whisper Base（約 145MB，品質較好）</option>
                         <option value="Xenova/whisper-small">Whisper Small（約 483MB，高品質）</option>
+                        <option value="Xenova/whisper-medium">Whisper Medium（約 1.5GB，高精準）</option>
+                        <option value="Xenova/whisper-large-v3">OpenAI Whisper Large-v3（約 3GB，極致精準，99語言，需 8GB+ RAM）</option>
                     </select>
                     <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">更換模型後需重新下載。模型支援繁體中文、英文、日文等多語言。</p>
                 </div>
@@ -1371,10 +1374,11 @@ function sup(key, val) {
 // onnx-community 模型使用 static KV-cache，需要額外的 cache_position 輸入，
 // 無法直接透過標準 pipeline 呼叫，會報 "Missing input: cache_position" 錯誤。
 const WHISPER_MODELS = {
-    'tiny':   'Xenova/whisper-tiny',     // ~75MB   極速
-    'base':   'Xenova/whisper-base',     // ~141MB  輕量
-    'small':  'Xenova/whisper-small',    // ~483MB  ★推薦，支援繁中/英/日
-    'medium': 'Xenova/whisper-medium'    // ~1.5GB  高精準（需足夠 RAM）
+    'tiny':     'Xenova/whisper-tiny',       // ~75MB   極速
+    'base':     'Xenova/whisper-base',       // ~141MB  輕量
+    'small':    'Xenova/whisper-small',      // ~483MB  ★推薦，支援繁中/英/日
+    'medium':   'Xenova/whisper-medium',     // ~1.5GB  高精準（需足夠 RAM）
+    'large-v3': 'Xenova/whisper-large-v3'   // ~3GB    最高精準，99語言（需 8GB+ RAM）
 };
 
 // ── OpenCC 繁體/簡體轉換器 ──
@@ -2875,10 +2879,8 @@ function updateAdminProjTab() {
     const btn = document.getElementById('projViewAdmin');
     if (btn) btn.style.display = isAdmin ? '' : 'none';
 
-    // 「個人設定」按鈕：有非管理員用戶登入時才顯示
-    const userPrefsBtn = document.getElementById('userPrefsBtn');
-    if (userPrefsBtn) userPrefsBtn.style.display = (u && !isAdmin) ? '' : 'none';
-    // 「後台設定」按鈕：永遠顯示，不需更新標籤
+    // 「個人設定」按鈕：永遠顯示（固定在上方）
+    // 「後台設定」按鈕：永遠顯示（固定在下方，不需更新）
 }
 
 function autoSaveProject() {
@@ -3426,8 +3428,9 @@ function showAuthGate() {
         } else {
             if (wrap) wrap.innerHTML = '';
         }
-        // Facebook 按鈕
+        // Facebook 按鈕（顯示時同步確保 SDK 已載入）
         if (fbBtn) fbBtn.style.display = fbId ? 'flex' : 'none';
+        if (fbId) initFacebookSDK();
         // OAuth 已設定模式：說明管理員旁路僅限設定
         const atBtn = document.querySelector('#agAdminToggle button');
         if (atBtn) atBtn.innerHTML = '<i class="fas fa-gear" style="margin-right:6px;"></i>管理員緊急設定入口（僅開啟後台設定）';
@@ -3570,17 +3573,29 @@ function handleGoogleCredential(response) {
 function initFacebookSDK() {
     const appId = gs('facebookAppId');
     if (!appId) return;
+
+    // 若 FB 已初始化且 appId 相同則直接套用，不重複載入
+    if (typeof FB !== 'undefined' && FB.version) {
+        try { FB.init({ appId: appId, cookie: true, xfbml: false, version: 'v19.0' }); } catch(e) {}
+        return;
+    }
+
+    // 設定 fbAsyncInit（必須在 SDK 載入前設定）
     window.fbAsyncInit = function() {
         FB.init({ appId: appId, cookie: true, xfbml: false, version: 'v19.0' });
     };
-    // 動態載入 Facebook SDK
-    if (!document.getElementById('facebook-jssdk')) {
-        const js = document.createElement('script');
-        js.id = 'facebook-jssdk';
-        js.src = 'https://connect.facebook.net/zh_TW/sdk.js';
-        js.async = true; js.defer = true;
-        document.head.appendChild(js);
-    }
+
+    // 若已有舊 SDK script 則移除，重新載入（App ID 可能已變更）
+    const existing = document.getElementById('facebook-jssdk');
+    if (existing) existing.parentNode.removeChild(existing);
+
+    // 動態載入 Facebook SDK（en_US 相容性最佳）
+    const js = document.createElement('script');
+    js.id = 'facebook-jssdk';
+    js.src = 'https://connect.facebook.net/en_US/sdk.js';
+    js.async = true; js.defer = true;
+    js.onerror = () => console.warn('[FB SDK] 載入失敗，請確認網路連線或 App ID 設定是否正確');
+    document.head.appendChild(js);
 }
 
 function doFacebookLogin() {
@@ -3590,7 +3605,9 @@ function doFacebookLogin() {
         return;
     }
     if (typeof FB === 'undefined') {
-        showAgErr('Facebook SDK 尚未載入，請確認網路連線後重新整理頁面。');
+        // SDK 尚未載入，嘗試重新觸發載入後提示用戶稍候
+        initFacebookSDK();
+        showAgErr('Facebook SDK 載入中，請稍候幾秒後再次點擊。若持續失敗，請確認網路連線並重新整理頁面，或確認 Facebook App ID 設定正確。');
         return;
     }
     FB.login(function(resp) {
@@ -3977,6 +3994,11 @@ function saveSettings() {
     // OAuth 設定完成後，舊的管理員旁路自動失效，使用者必須透過正式帳號登入
     if (newGoogleId || newFbId) {
         localStorage.removeItem('vf_auth_bypass');
+    }
+    // Facebook App ID 有設定時，立即重新載入 SDK（不需重整頁面）
+    if (newFbId) {
+        window.FB = undefined; // 強制重新初始化
+        initFacebookSDK();
     }
     if(nu) ss('adminUser', nu);
     else if(!gs('adminUser')) ss('adminUser','mark');
