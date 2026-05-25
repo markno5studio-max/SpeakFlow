@@ -294,8 +294,10 @@ textarea.fi{resize:vertical;}
 /* 管理員在線狀態 */
 #settingsBtn[data-admin="on"]{color:var(--accent-green)!important;}
 #adminBtnLabel{flex:1;}
-/* settingsBtn 子列（標題列）內的 icon 不跟著 column flex 排列 */
-#settingsBtn > div:first-child{width:100%;}
+/* 外層包覆已有 border-top，settingsBtn 本身不再加 */
+#settingsBtn{border-top:none!important;}
+/* 快速登出鍵 hover 效果 */
+#adminQuickLogoutBtn:hover{background:rgba(240,96,96,.18)!important;}
 
 /* ─── PLAY BAR ─── */
 .play-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);transition:border-radius .15s;}
@@ -509,13 +511,20 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
         <!-- 管理員在線時，顯示所有帳號（僅管理員可見）-->
         <div id="sbOtherAccounts"></div>
         <!-- 管理員登入/在線：固定在最下方，永遠可見 -->
-        <div class="sb-settings" id="settingsBtn" style="justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 12px;">
-            <div style="display:flex;align-items:center;gap:8px;width:100%;">
-                <i class="fas fa-lock" id="adminBtnIcon" style="width:14px;text-align:center;font-size:12px;flex-shrink:0;"></i>
-                <span id="adminBtnLabel">管理員登入</span>
-                <span id="adminOnlineDot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--accent-green);margin-left:auto;flex-shrink:0;box-shadow:0 0 6px rgba(61,212,154,.9);"></span>
+        <div style="display:flex;align-items:stretch;border-top:1px solid var(--border);">
+            <div class="sb-settings" id="settingsBtn" style="flex:1;justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 12px;border-top:none;">
+                <div style="display:flex;align-items:center;gap:8px;width:100%;">
+                    <i class="fas fa-lock" id="adminBtnIcon" style="width:14px;text-align:center;font-size:12px;flex-shrink:0;"></i>
+                    <span id="adminBtnLabel">管理員登入</span>
+                    <span id="adminOnlineDot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--accent-green);margin-left:auto;flex-shrink:0;box-shadow:0 0 6px rgba(61,212,154,.9);"></span>
+                </div>
+                <div id="adminLoginBy" style="display:none;font-size:10px;color:var(--accent-green);opacity:.75;padding-left:22px;"></div>
             </div>
-            <div id="adminLoginBy" style="display:none;font-size:10px;color:var(--accent-green);opacity:.75;padding-left:22px;"></div>
+            <!-- 管理員在線時：快速登出按鈕 -->
+            <button id="adminQuickLogoutBtn" onclick="adminLogout()" title="登出管理員"
+                style="display:none;padding:0 11px;background:rgba(240,96,96,.07);border:none;border-left:1px solid var(--border);color:var(--accent-red);cursor:pointer;font-size:13px;transition:var(--t);flex-shrink:0;">
+                <i class="fas fa-power-off"></i>
+            </button>
         </div>
     </div>
 </aside>
@@ -931,7 +940,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
 
 <!-- ═══ LOGIN MODAL（已登入後點擊頭像顯示帳號資訊）═══ -->
 <div class="overlay" id="loginModal">
-    <div class="mbox sm">
+    <div class="mbox md">
         <div class="m-hd">
             <div class="m-ttl"><i class="fas fa-user-circle" style="color:var(--primary);margin-right:7px;"></i>帳號資訊</div>
             <button class="m-close" onclick="closeModal('loginModal')"><i class="fas fa-times"></i></button>
@@ -1890,21 +1899,67 @@ async function initLocalModel() {
         }
     };
 
-    // dtype: WebGPU 使用 fp16（GPU 半精度，快 2-3x）；WASM 使用 q8（CPU 量化，快 3-4x）
-    const tryLoad = async (dev, lbl) => pipeline('automatic-speech-recognition', modelId, {
+    // dtype 選擇策略：
+    //   WebGPU → fp16（GPU 半精度）；若不支援自動降級 WASM
+    //   WASM tiny/base/small → q8（有完整量化檔，速度快）
+    //   WASM medium/large-v3 → 先嘗試 q8，若量化檔不存在（404）則回退 fp32
+    const getWasmDtype = (k) => (k === 'medium' || k === 'large-v3') ? 'q8' : 'q8';
+    const getFallbackDtype = (k, dev) => {
+        if (dev === 'webgpu') return 'fp32'; // fp16 不支援則改 fp32
+        return 'fp32'; // WASM q8 失敗則改 fp32
+    };
+
+    const tryLoad = async (dev, lbl, dtype) => pipeline('automatic-speech-recognition', modelId, {
         device: dev,
-        dtype: dev === 'webgpu' ? 'fp16' : 'q8',
+        dtype: dtype,
         progress_callback: buildProgress(lbl)
     });
 
+    const primaryDtype = device === 'webgpu' ? 'fp16' : getWasmDtype(key);
+
     try {
-        transcriber = await tryLoad(device, devLabel);
+        transcriber = await tryLoad(device, devLabel, primaryDtype);
     } catch(err) {
-        if (device === 'webgpu') {
+        const isWebGPUFail = device === 'webgpu';
+        const isFetchFail  = err.message && (
+            err.message.includes('404') || err.message.includes('fetch') ||
+            err.message.includes('not found') || err.message.includes('Failed to fetch') ||
+            err.message.includes('quantized') || err.message.includes('q8')
+        );
+
+        if (isWebGPUFail) {
+            // WebGPU 失敗 → 降級 WASM
             device = 'wasm'; devLabel = 'WASM';
             setModelStatus('ms-loading', '[WASM] WebGPU 不支援，切換 CPU 模式...', true);
+            const wasmDtype = getWasmDtype(key);
             try {
-                transcriber = await tryLoad('wasm', 'WASM');
+                transcriber = await tryLoad('wasm', 'WASM', wasmDtype);
+            } catch(err2) {
+                // WASM q8 也失敗 → 嘗試 fp32
+                const fb = getFallbackDtype(key, 'wasm');
+                if (fb !== wasmDtype) {
+                    setModelStatus('ms-loading', `[WASM] 量化檔案不存在，改用 fp32 載入（檔案較大）...`, true);
+                    try {
+                        transcriber = await tryLoad('wasm', 'WASM', fb);
+                    } catch(err3) {
+                        localModelLoading = false;
+                        setModelStatus('ms-error', '載入失敗：' + err3.message.slice(0, 70), false);
+                        toast('模型載入失敗：' + err3.message.slice(0, 50), 'err');
+                        return;
+                    }
+                } else {
+                    localModelLoading = false;
+                    setModelStatus('ms-error', '載入失敗：' + err2.message.slice(0, 70), false);
+                    toast('模型載入失敗：' + err2.message.slice(0, 50), 'err');
+                    return;
+                }
+            }
+        } else if (isFetchFail && primaryDtype !== 'fp32') {
+            // 量化檔案不存在（404）→ 回退 fp32
+            const fb = getFallbackDtype(key, device);
+            setModelStatus('ms-loading', `[${devLabel}] 量化檔案不存在，改用 fp32 載入（檔案較大，請稍候）...`, true);
+            try {
+                transcriber = await tryLoad(device, devLabel, fb);
             } catch(err2) {
                 localModelLoading = false;
                 setModelStatus('ms-error', '載入失敗：' + err2.message.slice(0, 70), false);
@@ -2367,13 +2422,23 @@ async function runLocalTranscription(lt) {
             try { await transcriber.dispose(); } catch(e) {}
             const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
             env.allowLocalModels = false; env.useBrowserCache = true;
-            transcriber = await pipeline('automatic-speech-recognition', modelId, {
-                device: 'wasm',
-                dtype: 'q8', // WASM 量化加速（CPU 快 3-4x）
-                progress_callback: (p) => {
-                    if (p.status==='loading') lt.textContent='從快取重新載入模型（WASM q8 量化）...';
-                }
-            });
+            // 先嘗試 q8（量化），若失敗則回退 fp32（適用 medium/large-v3）
+            try {
+                transcriber = await pipeline('automatic-speech-recognition', modelId, {
+                    device: 'wasm', dtype: 'q8',
+                    progress_callback: (p) => {
+                        if (p.status==='loading') lt.textContent='從快取重新載入模型（WASM q8）...';
+                    }
+                });
+            } catch(e2) {
+                lt.textContent = 'q8 量化不可用，改用 fp32 重試...';
+                transcriber = await pipeline('automatic-speech-recognition', modelId, {
+                    device: 'wasm', dtype: 'fp32',
+                    progress_callback: (p) => {
+                        if (p.status==='loading') lt.textContent='從快取重新載入模型（WASM fp32）...';
+                    }
+                });
+            }
             setModelStatus('ms-ready', `[WASM] ${modelId.split('/')[1]} 已切換至 CPU 模式`, false);
             result = await transcriber(audioData, opts);
         } else {
@@ -2437,18 +2502,19 @@ async function runGeminiTranscription(model, lt) {
 輸出格式範例：
 {"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容文字"}],"chapters":[]}`;
 
-    // Gemini 2.5 系列支援 thinkingConfig（深度推理，提升專有名詞辨識精度）
+    // Gemini 2.5 支援 thinkingConfig；音訊轉錄為確定性任務，停用思考（thinkingBudget:0）
+    // 以加快回應速度，thinkingConfig 必須放在 generationConfig 內部
     const isThinkingModel = model.includes('2.5');
     const payload = {
         contents: [{ parts: [{ text: prompt }, audioPart] }],
         generationConfig: {
-            temperature: 0,          // 確定性輸出，避免幻覺
+            temperature: 0,
             maxOutputTokens: 65536,
-            responseMimeType: 'application/json'  // JSON 模式：加快回應 + 減少格式錯誤
-        },
-        ...(isThinkingModel && {
-            thinkingConfig: { thinkingBudget: 2048 } // 適中思考預算，平衡精度與速度
-        })
+            responseMimeType: 'application/json',
+            ...(isThinkingModel && {
+                thinkingConfig: { thinkingBudget: 0 } // 0 = 停用思考，轉錄任務速度優先
+            })
+        }
     };
 
     lt.textContent = `${modelLabel} 辨識中，請稍候（大型音訊可能需 1～3 分鐘）...`;
@@ -2844,16 +2910,8 @@ function getUserTrashKey() {
 }
 // 是否為管理員（可看到所有人的專案）
 function isAdminUser() {
-    // ① 有效的管理員密碼 session（完全獨立於 OAuth 用戶身份）
-    if (isAdminSessionValid()) return true;
-    // ② OAuth email 與設定的管理員 email 相符（免密碼管理員）
-    try {
-        const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
-        if (!u) return false;
-        const e = (u.email || '').toLowerCase().trim();
-        const ae = (gs('adminEmail') || '').toLowerCase().trim();
-        return !!(ae && e === ae);
-    } catch(e) { return false; }
+    // 管理員權限「僅」透過明確輸入帳號密碼取得，不因 OAuth 身份自動賦予
+    return isAdminSessionValid();
 }
 // 登入時將使用者登記到索引（供管理員查閱所有帳號）
 function registerUserInIndex(userData) {
@@ -3924,11 +3982,12 @@ function updateUserUI() {
 
 // ── 更新管理員按鈕外觀（登入/在線）──
 function updateAdminBtn() {
-    const lbl = document.getElementById('adminBtnLabel');
-    const dot = document.getElementById('adminOnlineDot');
-    const ico = document.getElementById('adminBtnIcon');
-    const btn = document.getElementById('settingsBtn');
-    const byEl = document.getElementById('adminLoginBy');
+    const lbl    = document.getElementById('adminBtnLabel');
+    const dot    = document.getElementById('adminOnlineDot');
+    const ico    = document.getElementById('adminBtnIcon');
+    const btn    = document.getElementById('settingsBtn');
+    const byEl   = document.getElementById('adminLoginBy');
+    const quitEl = document.getElementById('adminQuickLogoutBtn');
     if (!btn) return;
     const isAdmin = isAdminUser();
     if (lbl) lbl.textContent = isAdmin ? '管理員在線' : '管理員登入';
@@ -3936,6 +3995,8 @@ function updateAdminBtn() {
     if (ico) ico.className = isAdmin ? 'fas fa-shield-halved' : 'fas fa-lock';
     btn.style.color = isAdmin ? 'var(--accent-green)' : '';
     btn.dataset.admin = isAdmin ? 'on' : 'off';
+    // 快速登出鍵：只在管理員在線時顯示
+    if (quitEl) quitEl.style.display = isAdmin ? 'block' : 'none';
     // 顯示是誰啟動了管理員 session
     if (byEl) {
         if (isAdmin) {
