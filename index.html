@@ -847,11 +847,17 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     </select>
                 </div>
                 <div class="c-hd" style="margin-bottom:10px;padding-top:0;border-top:none;">
-                    <div style="display:flex;gap:5px;flex-wrap:wrap;">
+                    <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
                         <button class="btn" onclick="manualOpenCC()" id="openccBtn" title="一鍵轉換為台灣繁體用語" style="display:none;"><i class="fas fa-language"></i> 繁體優化</button>
                         <button class="btn" onclick="convertAllToTraditional()" id="toTradBtn" title="全文轉換為台灣繁體中文" style="display:none;"><i class="fas fa-a"></i> 簡→繁</button>
                         <button class="btn" onclick="convertAllToSimplified()" id="toSimpBtn" title="全文轉換為簡體中文" style="display:none;"><i class="fas fa-a"></i> 繁→簡</button>
                         <button class="btn" onclick="reapplyHighlights()"><i class="fas fa-highlighter"></i> 套用標記</button>
+                        <!-- 逐字稿文字大小 -->
+                        <div style="display:flex;align-items:center;gap:2px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px 4px;">
+                            <button onclick="adjustTranscriptFontSize(-2)" title="縮小文字" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:2px 5px;font-size:12px;font-weight:700;line-height:1;">A-</button>
+                            <span id="transcriptFontSizeLabel" style="font-size:10.5px;color:var(--text-tertiary);min-width:26px;text-align:center;">14px</span>
+                            <button onclick="adjustTranscriptFontSize(2)" title="放大文字" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:2px 5px;font-size:15px;font-weight:700;line-height:1;">A+</button>
+                        </div>
                         <button class="btn" onclick="exportTXT()"><i class="fas fa-file-lines"></i> TXT</button>
                         <button class="btn btn-p" onclick="exportSRT()"><i class="fas fa-closed-captioning"></i> SRT</button>
                     </div>
@@ -1540,6 +1546,12 @@ window.onload = () => {
     onModelChange();
     setInputMode('file');
     loadSubtitleStyles(); applySubStyle();
+    // 恢復上次儲存的逐字稿字型大小
+    const _savedFs = parseInt(localStorage.getItem('vf_tr_fontsize')) || 14;
+    const _tb = document.getElementById('transcriptBox');
+    if (_tb) _tb.style.fontSize = _savedFs + 'px';
+    const _fslbl = document.getElementById('transcriptFontSizeLabel');
+    if (_fslbl) _fslbl.textContent = _savedFs + 'px';
     const tds = document.getElementById('trashDaysSelect');
     if (tds) tds.value = getTrashDays();
 
@@ -3022,15 +3034,25 @@ function sanitizeResult(result, langCode, maxCh) {
         seen.add(key); seenNorm.add(norm);
         return true;
     });
-    // 強制分割超過 maxCh 字的段落
+    // 強制分割超過 maxCh 字的段落（按時間比例分配每段時間碼，避免 SRT 重複時間戳）
     const maxC = parseInt(maxCh || document.getElementById('maxChars')?.value || 0);
     if (maxC > 0) {
         const expanded = [];
         for (const line of result.transcript) {
             if (line.text && line.text.length > maxC) {
                 const parts = splitLongText(line.text, maxC);
+                const startS = srtToSecs(line.start || '');
+                const endS   = srtToSecs(line.end   || line.start || '');
+                const dur    = Math.max(0, endS - startS);
+                const n      = parts.length;
                 parts.forEach((part, pi) => {
-                    expanded.push({ ...line, text: part, _split: pi > 0 });
+                    expanded.push({
+                        ...line,
+                        start: secsToSRT(startS + (pi / n) * dur),
+                        end:   secsToSRT(startS + ((pi + 1) / n) * dur),
+                        text:  part,
+                        _split: pi > 0
+                    });
                 });
             } else {
                 expanded.push(line);
@@ -3063,6 +3085,21 @@ function finishTranscription() {
     toast('轉錄完成！已儲存至「我的專案」', 'ok');
 }
 
+// ── 逐字稿字型大小調整 ──
+function adjustTranscriptFontSize(delta) {
+    const tb = document.getElementById('transcriptBox');
+    const cur = parseInt(tb.style.fontSize) || parseInt(localStorage.getItem('vf_tr_fontsize')) || 14;
+    const next = Math.max(10, Math.min(28, cur + delta));
+    tb.style.fontSize = next + 'px';
+    localStorage.setItem('vf_tr_fontsize', next);
+    const lbl = document.getElementById('transcriptFontSizeLabel');
+    if (lbl) lbl.textContent = next + 'px';
+    // 重繪時間戳大小跟著縮放（不重建 DOM，直接更新所有 .tr-tc 行內 style）
+    document.querySelectorAll('.tr-tc').forEach(el => {
+        el.style.fontSize = Math.max(9, next * 0.72) + 'px';
+    });
+}
+
 // ══════════════════════════════════════════
 // 渲染結果
 // ══════════════════════════════════════════
@@ -3077,20 +3114,35 @@ function renderResults() {
     const usePNA=true; // 專有名詞自動標注：永遠啟用
     const maxC=parseInt(document.getElementById('maxChars')?.value||0);
     const tb=document.getElementById('transcriptBox');
-    const curSize=parseInt(tb.style.fontSize)||14;
-    // 渲染前確保每段都不超過 maxChars（動態重整）
+    const savedSize=parseInt(localStorage.getItem('vf_tr_fontsize'))||14;
+    const curSize=parseInt(tb.style.fontSize)||savedSize;
+    if(tb.style.fontSize==='') { tb.style.fontSize=curSize+'px'; }
+    const lbl=document.getElementById('transcriptFontSizeLabel');
+    if(lbl) lbl.textContent=curSize+'px';
+    // 顯示用本地副本（不修改 parsedResult.transcript 本體，避免時間碼被覆蓋）
+    let displayLines=parsedResult.transcript;
     if(maxC>0){
         const expanded=[];
-        for(const line of parsedResult.transcript){
+        for(const line of displayLines){
             if(line.text&&line.text.replace(/\s/g,'').length>maxC){
                 const parts=splitLongText(line.text,maxC);
-                parts.forEach((part,pi)=>expanded.push({...line,text:part,_split:pi>0}));
+                // 按比例分配時間段，讓分行各有獨立時間戳
+                const startS=srtToSecs(line.start||'');
+                const endS=srtToSecs(line.end||line.start||'');
+                const dur=Math.max(0,endS-startS);
+                const n=parts.length;
+                parts.forEach((part,pi)=>expanded.push({
+                    ...line,
+                    start:secsToSRT(startS+(pi/n)*dur),
+                    end:secsToSRT(startS+((pi+1)/n)*dur),
+                    text:part,_split:pi>0
+                }));
             } else { expanded.push(line); }
         }
-        parsedResult.transcript=expanded;
+        displayLines=expanded; // 僅用於本次渲染，不回寫 parsedResult
     }
     let words=0, html='';
-    parsedResult.transcript.forEach((line,i)=>{
+    displayLines.forEach((line,i)=>{
         let text=esc(line.text||''); words+=(line.text||'').replace(/\s/g,'').length;
         if(useFH&&fatKeywords.length){
             fatKeywords.forEach(kw=>{
@@ -3111,7 +3163,7 @@ function renderResults() {
     tb.innerHTML=html;
     renderSpeakerPanel(); // 同步更新說話者面板
     document.getElementById('statsPanel').style.display='grid';
-    document.getElementById('statSegments').textContent=parsedResult.transcript.length;
+    document.getElementById('statSegments').textContent=displayLines.length;
     document.getElementById('statWordCount').textContent=words.toLocaleString();
     const m=Math.floor(audioDuration/60),s=Math.floor(audioDuration%60);
     document.getElementById('statDuration').textContent=`${p2(m)}:${p2(s)}`;
@@ -5492,21 +5544,55 @@ function secsToSRTTime(t) {
 async function exportSRT() {
     if (!parsedResult?.transcript) { toast('無轉錄結果', 'err'); return; }
 
-    // 統一把各種格式的時間碼轉成合法 SRT 字串
-    // 永遠透過 srtToSecs → secsToSRTTime 正規化，修復任何歷史儲存的毫秒溢位格式
-    const toSRTStr = v => {
-        if (v == null || v === '') return '00:00:00,000';
-        if (typeof v === 'number') return secsToSRTTime(isFinite(v) && v >= 0 ? v : 0);
-        return secsToSRTTime(srtToSecs(String(v).trim()));
-    };
+    // ── Step 1：套用 maxChars 分割（與 renderResults 相同邏輯，但時間碼按比例分配）
+    const maxC = parseInt(document.getElementById('maxChars')?.value || 0);
+    let lines = parsedResult.transcript.filter(l => l.text?.trim());
+    if (maxC > 0) {
+        const expanded = [];
+        for (const line of lines) {
+            if (line.text.replace(/\s/g,'').length > maxC) {
+                const parts = splitLongText(line.text, maxC);
+                const startS = srtToSecs(line.start || '');
+                const endS   = srtToSecs(line.end || line.start || '');
+                const dur    = Math.max(0, endS - startS);
+                const n      = parts.length;
+                parts.forEach((part, pi) => expanded.push({
+                    ...line,
+                    start: startS + (pi / n) * dur,     // 秒數，待 Step 3 格式化
+                    end:   startS + ((pi + 1) / n) * dur,
+                    text:  part.trim()
+                }));
+            } else {
+                expanded.push({ ...line, start: srtToSecs(line.start||''), end: srtToSecs(line.end||line.start||'') });
+            }
+        }
+        lines = expanded;
+    } else {
+        // 統一轉為秒數
+        lines = lines.map(l => ({ ...l, start: srtToSecs(l.start||''), end: srtToSecs(l.end||l.start||'') }));
+    }
 
+    // ── Step 2：確保時間軸遞增（去除 start 早於前一段 end 的無效段落）
+    lines.sort((a, b) => a.start - b.start);
+
+    // ── Step 3：最小持續時間保護（每段至少 0.1 秒）
+    const MIN_DUR = 0.1;
+    lines.forEach(l => { if (l.end <= l.start) l.end = l.start + MIN_DUR; });
+
+    // ── Step 4：防重疊保護（用戶確認有效的邏輯，加上最小 0.05 秒 gap）
+    for (let i = 0; i < lines.length - 1; i++) {
+        if (lines[i].end > lines[i + 1].start) {
+            lines[i].end = Math.max(lines[i].start + MIN_DUR, lines[i + 1].start - 0.05);
+        }
+    }
+
+    // ── Step 5：格式化並輸出 SRT（無 BOM UTF-8 + CRLF）
     let srtLines = [];
     let seq = 1;
-    parsedResult.transcript.forEach(l => {
+    lines.forEach(l => {
         if (!l.text?.trim()) return;
-        const startStr = toSRTStr(l.start);
-        const endStr   = toSRTStr(l.end || l.start);
-        // SRT 規格：每條目內用 CRLF；條目間以空行分隔
+        const startStr = secsToSRTTime(l.start);
+        const endStr   = secsToSRTTime(l.end);
         srtLines.push(`${seq}\r\n${startStr} --> ${endStr}\r\n${l.text.trim()}\r\n`);
         seq++;
     });
