@@ -178,11 +178,14 @@ mark.fh{background:rgba(var(--primary-rgb),.22);color:var(--text-primary);paddin
 .ac-approve-btn:hover{background:rgba(61,212,154,.22);}
 .ac-reject-btn{padding:3px 10px;font-size:11.5px;background:rgba(240,96,96,.1);border:1px solid rgba(240,96,96,.25);color:var(--accent-red);border-radius:var(--r-sm);cursor:pointer;transition:var(--t);margin-left:4px;}
 .ts-tag{color:var(--primary);font-size:10px;font-weight:700;margin-right:6px;opacity:.75;}
-.ch-list{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:5px;max-height:200px;overflow-y:auto;}
-.chi{display:flex;gap:9px;padding:6px 8px;border-radius:4px;transition:var(--t);}
-.chi:hover{background:rgba(255,255,255,.03);}
-.cht{color:var(--primary);font-weight:700;font-size:11px;white-space:nowrap;}
-.chl{font-size:12px;color:var(--text-secondary);}
+.ch-list{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:6px;max-height:360px;overflow-y:auto;}
+.chi{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-radius:var(--r-sm);transition:var(--t);border-bottom:1px solid rgba(255,255,255,.04);}
+.chi:last-child{border-bottom:none;}
+.chi:hover{background:rgba(255,255,255,.05);}
+.cht{color:#fff;font-weight:800;font-size:14px;white-space:nowrap;background:rgba(var(--primary-rgb),.18);border:1px solid rgba(var(--primary-rgb),.35);padding:2px 8px;border-radius:5px;letter-spacing:.5px;flex-shrink:0;line-height:1.6;}
+.chl{font-size:13.5px;color:var(--text-primary);line-height:1.55;padding-top:3px;}
+mark.pn{background:rgba(74,124,247,.15);color:#7aaaf8;padding:0 3px;border-radius:3px;font-weight:700;border-bottom:2px dashed #4a7cf7;cursor:help;}
+mark.pn.nr{background:rgba(61,212,154,.13);color:#3dd49a;border-bottom-color:#3dd49a;}
 
 /* ─── PROJECTS ─── */
 .proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
@@ -544,8 +547,8 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             <div class="upload" id="uploadZone">
                 <div class="up-icon"><i class="fas fa-cloud-arrow-up"></i></div>
                 <h3>點擊或拖曳媒體檔案至此</h3>
-                <p>支援 MP3、WAV、MP4、MOV 等格式，最長可達 2 小時以上<br><span class="warn">本地 Whisper 上限 500MB｜Gemini 雲端無限制（自動使用 Files API）</span></p>
-                <input type="file" id="fileInput" accept="audio/*,video/*" style="display:none;">
+                <p>支援 MP3、WAV、FLAC、M4A、AAC、OGG、OPUS、MP4、MOV、MKV 等所有主流格式<br><span class="warn">本地 Whisper 上限 1000MB｜Gemini 雲端無限制（自動使用 Files API）</span></p>
+                <input type="file" id="fileInput" accept="audio/*,video/*,.flac,.m4a,.aac,.ogg,.opus,.webm,.wma,.aiff,.au,.caf,.mp3,.wav,.mp4,.mov,.avi,.mkv,.wmv,.m4v,.3gp" style="display:none;">
             </div>
             <div class="fbar" id="fileBar" style="display:none;">
                 <i class="fas fa-music"></i>
@@ -591,6 +594,14 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <div>
                     <label class="fl">每行最大字數</label>
                     <input type="number" class="fi" id="maxChars" value="20" min="5" max="100">
+                </div>
+                <div>
+                    <label class="fl">降噪模式</label>
+                    <select class="fs" id="noiseReductionSelect">
+                        <option value="normal" selected>一般（原始音訊）</option>
+                        <option value="light">輕度降噪（去低頻噪音）</option>
+                        <option value="heavy">強力降噪（人聲分離）</option>
+                    </select>
                 </div>
                 <div>
                     <label class="fl">AI 引擎</label>
@@ -680,9 +691,15 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
         <!-- 主要內容區 -->
         <div id="projAllView"><div id="projGrid"></div></div>
         <div id="projTrashView" style="display:none;">
-            <div class="ph" style="margin-bottom:14px;">
-                <h3 style="font-size:14px;font-weight:700;">垃圾桶</h3>
-                <p style="font-size:12px;color:var(--text-secondary);">超過保留天數的專案將自動永久刪除。</p>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+                <div>
+                    <h3 style="font-size:14px;font-weight:700;margin-bottom:2px;">垃圾桶</h3>
+                    <p style="font-size:12px;color:var(--text-secondary);">超過保留天數的專案將自動永久刪除。</p>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button class="btn" style="font-size:12px;padding:5px 13px;" onclick="restoreAllTrash()"><i class="fas fa-rotate-left"></i> 全部還原</button>
+                    <button class="btn btn-danger" style="font-size:12px;padding:5px 13px;" onclick="permDeleteAllTrash()"><i class="fas fa-trash-can"></i> 全部刪除</button>
+                </div>
             </div>
             <div id="trashGrid"></div>
         </div>
@@ -1600,6 +1617,16 @@ window.onload = () => {
         if (micStream) { try { micStream.getTracks().forEach(t=>t.stop()); } catch(e) {} }
     });
 
+    // ── 管理員設定跨分頁同步 ──
+    // 當管理員在另一個分頁儲存設定時，此分頁自動套用最新顏色、站名、結果重繪
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'vf_admin_settings_v') {
+            applyColors();
+            applySiteInfo();
+            if (parsedResult?.transcript) renderResults();
+        }
+    });
+
     // 自動從瀏覽器快取還原上次使用的模型
     (async () => {
         const _lastModel = localStorage.getItem('vf_last_model');
@@ -2140,6 +2167,45 @@ async function prepAudio(file) {
     return resampled.getChannelData(0);
 }
 
+// 含降噪的音訊預處理（依 noiseMode 套用不同 Web Audio 濾波器）
+async function prepAudioWithNoise(file, noiseMode, lt) {
+    if (!noiseMode || noiseMode === 'normal') return prepAudio(file);
+    if (lt) lt.textContent = noiseMode === 'heavy' ? '正在進行人聲分離降噪...' : '正在套用輕度降噪...';
+    const buf = await file.arrayBuffer();
+    const tmpCtx = new AudioContext();
+    const decoded = await tmpCtx.decodeAudioData(buf);
+    await tmpCtx.close();
+    const targetSR = 16000;
+    const frameCount = Math.ceil(decoded.duration * targetSR);
+    const offCtx = new OfflineAudioContext(1, frameCount, targetSR);
+    const src = offCtx.createBufferSource();
+    src.buffer = decoded;
+
+    if (noiseMode === 'light') {
+        // 輕度降噪：高通濾波（> 80Hz）+ 低通濾波（< 8kHz），保留語音頻段
+        const hp = offCtx.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = 80; hp.Q.value = 0.7;
+        const lp = offCtx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 8000; lp.Q.value = 0.7;
+        src.connect(hp); hp.connect(lp); lp.connect(offCtx.destination);
+    } else if (noiseMode === 'heavy') {
+        // 強力降噪（人聲分離）：帶通 200-4000Hz + 強化中頻（人聲核心 1-3kHz）
+        const hp = offCtx.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = 200; hp.Q.value = 1.0;
+        const lp = offCtx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = 4000; lp.Q.value = 1.0;
+        const mid = offCtx.createBiquadFilter();
+        mid.type = 'peaking'; mid.frequency.value = 2000; mid.gain.value = 6; mid.Q.value = 0.8;
+        const comp = offCtx.createDynamicsCompressor();
+        comp.threshold.value = -30; comp.knee.value = 10;
+        comp.ratio.value = 8; comp.attack.value = 0.01; comp.release.value = 0.2;
+        src.connect(hp); hp.connect(lp); lp.connect(mid); mid.connect(comp); comp.connect(offCtx.destination);
+    }
+    src.start(0);
+    const resampled = await offCtx.startRendering();
+    return resampled.getChannelData(0);
+}
+
 // WAV 編碼器（PCM 16-bit mono）
 function encodeWAV(samples, sampleRate) {
     const buf = new ArrayBuffer(44 + samples.length * 2);
@@ -2295,8 +2361,8 @@ function whisperToResult(out, maxCh) {
 }
 
 function s2srt(s) {
-    if(s==null||isNaN(s)) return '00:00:00,000';
-    const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60), ms=Math.round((s%1)*1000);
+    if(s==null||isNaN(s)||!isFinite(s)||s<0) return '00:00:00,000';
+    const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60), ms=Math.floor((s%1)*1000);
     return `${p2(h)}:${p2(m)}:${p2(sec)},${String(ms).padStart(3,'0')}`;
 }
 function p2(n){ return String(n).padStart(2,'0'); }
@@ -2315,14 +2381,27 @@ function setupDrop() {
 }
 
 function pickFile(file) {
-    if(file.size > 2048*1024*1024){
-        toast(`檔案過大（${(file.size/1024/1024).toFixed(0)}MB），上限 2GB`, 'err');
+    const model = document.getElementById('modelSelect')?.value || 'gemini-2.5-flash';
+    const isLocal = model === 'local' || model === 'whisper-large-v3';
+    const localLimit = 1000 * 1024 * 1024; // 1000MB for local Whisper
+    if (isLocal && file.size > localLimit) {
+        toast(`本地 Whisper 上限 1000MB，目前檔案 ${(file.size/1024/1024).toFixed(0)}MB。請改用 Gemini 雲端引擎處理大型檔案。`, 'err');
+        document.getElementById('fileInput').value='';
+        document.getElementById('fileBar').style.display='none';
+        currentFile=null; updateStartBtn(); return;
+    }
+    if(file.size > 4096*1024*1024){
+        toast(`檔案過大（${(file.size/1024/1024).toFixed(0)}MB），上限 4GB`, 'err');
         document.getElementById('fileInput').value='';
         document.getElementById('fileBar').style.display='none';
         currentFile=null; updateStartBtn(); return;
     }
     currentFile=file;
-    document.getElementById('fileNameDisplay').textContent=file.name;
+    // 精準解碼並顯示完整檔名（含中文、特殊字元）
+    const displayName = decodeURIComponent(file.name);
+    const fnEl = document.getElementById('fileNameDisplay');
+    fnEl.textContent = displayName;
+    fnEl.title = displayName;
     document.getElementById('fileSizeDisplay').textContent=(file.size/1024/1024).toFixed(2)+' MB';
     document.getElementById('fileBar').style.display='flex';
     updateStartBtn();
@@ -2409,25 +2488,42 @@ async function startTranscription() {
 const WHISPER_LANG = {'zh-TW':'zh','zh-CN':'zh','en':'en','ja':'ja','ko':'ko','es':'es','fr':'fr','de':'de','it':'it'};
 const LANG_DISPLAY = {'zh-TW':'繁體中文','zh-CN':'簡體中文','en':'English','ja':'日本語','ko':'한국어','es':'Español','fr':'Français','de':'Deutsch','it':'Italiano'};
 
+// 建立 Whisper initial_prompt：根據語言提供人名、專有名詞提示
+function buildWhisperInitialPrompt(langCode) {
+    const prompts = {
+        'zh-TW': '以下是台灣繁體中文的語音轉錄。請正確辨識人名、地名、品牌名、專業術語，使用台灣慣用詞彙，標點符號完整。',
+        'zh-CN': '以下是简体中文语音转录。请正确识别人名、地名、品牌名、专业术语，使用规范的现代汉语，标点符号完整。',
+        'en': 'The following is a transcript of English audio. Please accurately transcribe proper nouns, names, brands, and technical terms.',
+        'ja': '以下は日本語音声の文字起こしです。人名、地名、ブランド名、専門用語を正確に認識してください。',
+        'ko': '다음은 한국어 음성 전사입니다. 인명, 지명, 브랜드명, 전문 용어를 정확하게 인식하세요.',
+    };
+    return prompts[langCode] || prompts['zh-TW'];
+}
+
 async function runLocalTranscription(lt) {
     if (!transcriber) throw new Error('請先初始化本地模型。');
     lt.textContent = '正在解碼音訊並重新取樣至 16kHz...';
-    const audioData = await prepAudio(currentFile);
+    // 套用降噪處理
+    const noiseMode = document.getElementById('noiseReductionSelect')?.value || 'normal';
+    const audioData = await prepAudioWithNoise(currentFile, noiseMode, lt);
     const langCode = document.getElementById('langSelect').value;
     const maxCh = document.getElementById('maxChars').value;
     const whisperLang = WHISPER_LANG[langCode] || 'zh';
+    const key = document.getElementById('whisperModelSelect')?.value || 'small';
+    // 依模型大小調整參數：tiny/base 速度優先；small/medium/large 品質優先
+    const isFastModel = (key === 'tiny' || key === 'base');
     lt.textContent = `Whisper 本地辨識中（語言：${LANG_DISPLAY[langCode]}，依音訊長度可能需數分鐘）...`;
-    // 效能優化：greedy 推論（num_beams:1）+ 較大分段（30s）+ 加大重疊（stride:6）防止邊界丟字
     const opts = {
         chunk_length_s: 30,
-        stride_length_s: 6,        // 增加重疊（4→6）：減少分段邊界的字詞丟失
+        stride_length_s: isFastModel ? 5 : 6,
         language: whisperLang,
         task: 'transcribe',
         return_timestamps: true,
-        num_beams: 1,              // 保持 greedy（速度優先）
-        temperature: 0,            // 確定性輸出，避免隨機幻覺
-        condition_on_prev_tokens: true, // 使用前文調整後段辨識，提升連貫性
-        no_repeat_ngram_size: 3,   // 防止 3-gram 重複（減少幻覺重複句）
+        num_beams: isFastModel ? 1 : 2,     // 大模型用 beam=2 提升精準度
+        temperature: 0,
+        condition_on_prev_tokens: true,      // 前文連貫性
+        no_repeat_ngram_size: 3,             // 防止重複幻覺
+        initial_prompt: buildWhisperInitialPrompt(langCode), // 人名/專有名詞提示
     };
     let result;
     try {
@@ -2665,13 +2761,13 @@ async function runOpenAITranscription(lt) {
     const maxCh = parseInt(document.getElementById('maxChars').value) || 20;
     const segments = data.segments || [];
 
-    // 秒數 → HH:MM:SS,mmm 格式
+    // 秒數 → HH:MM:SS,mmm 格式（Math.floor 避免毫秒溢位成 4 位）
     const secToTC = (s) => {
         const h = Math.floor(s / 3600);
         const m = Math.floor((s % 3600) / 60);
-        const sec = s % 60;
-        const ms = Math.round((sec - Math.floor(sec)) * 1000);
-        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(Math.floor(sec)).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+        const sec = Math.floor(s % 60);
+        const ms = Math.floor((s % 1) * 1000);
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
     };
 
     let transcript;
@@ -2854,6 +2950,36 @@ function splitLongText(text, maxC) {
     return chunks.filter(Boolean).length ? chunks.filter(Boolean) : [text];
 }
 
+// ══════════════════════════════════════════
+// 專有名詞自動標注
+// ══════════════════════════════════════════
+// 常見中文姓氏（用於偵測中文人名）
+const CJK_SURNAMES = new Set('王李張劉陳楊黃趙吳周徐孫馬胡朱郭何高林羅鄭梁謝宋唐許韓馮鄧曹彭曾蕭田董袁潘于蔣蔡余杜葉程蘇魏呂丁任盧姚沈鍾薛邵傅龔武卓簡洪詹莊仲廖邱江賴阮游施范顏翁施武賀柯陸孔柳歐陶湯賈廖向侯喻聶温孟莫邱丁卜尤方尹仁仇牛仲任余成何伍汪沈易苟周林柳查殷唐凌高唐啟桂浦翁欒馬柴貫麻方倪巫薛鐘關');
+const PN_SURNAME_REGEX = new RegExp(`([${[...CJK_SURNAMES].join('')}])[\\u4e00-\\u9fa5]{1,3}`, 'g');
+
+function annotateProperNouns(html) {
+    if (!html) return html;
+    // 僅處理 HTML 文字節點（跳過已有 <tag> 的部分，避免破壞現有標記）
+    return html.replace(/(<[^>]+>)|([^<]+)/g, (full, tag, text) => {
+        if (tag) return tag; // HTML 標籤直接保留
+        if (!text || !text.trim()) return text;
+        let t = text;
+        // 1. 英文大寫開頭的專有名詞（品牌/人名，如 Apple、ChatGPT、OpenAI）
+        t = t.replace(/\b([A-Z][A-Za-z0-9]{2,}(?:\s[A-Z][A-Za-z0-9]{1,})*)\b/g, (m) =>
+            `<mark class="pn" title="專有名詞：${m}">${m}</mark>`);
+        // 2. 書名號《》內容
+        t = t.replace(/《([^》]{1,20})》/g, (_, n) =>
+            `《<mark class="pn" title="標題：${n}">${n}</mark>》`);
+        // 3. 引號「」內容
+        t = t.replace(/「([^」]{2,20})」/g, (_, n) =>
+            `「<mark class="pn" title="名稱：${n}">${n}</mark>」`);
+        // 4. 中文人名（常見姓氏 + 1-3字名）
+        t = t.replace(PN_SURNAME_REGEX, (m) =>
+            `<mark class="pn" title="人名：${m}">${m}</mark>`);
+        return t;
+    });
+}
+
 // 後處理：移除重複幻覺段落，並套用繁簡轉換
 function sanitizeResult(result, langCode, maxCh) {
     if (!result?.transcript) return result;
@@ -2948,17 +3074,31 @@ function renderResults() {
     const useFH=document.getElementById('enableFatHighlight').checked;
     const showDiar=document.getElementById('enableDiarization').checked;
     const showTime=document.getElementById('enableTimestamps').checked;
+    const usePNA=true; // 專有名詞自動標注：永遠啟用
+    const maxC=parseInt(document.getElementById('maxChars')?.value||0);
     const tb=document.getElementById('transcriptBox');
     const curSize=parseInt(tb.style.fontSize)||14;
+    // 渲染前確保每段都不超過 maxChars（動態重整）
+    if(maxC>0){
+        const expanded=[];
+        for(const line of parsedResult.transcript){
+            if(line.text&&line.text.replace(/\s/g,'').length>maxC){
+                const parts=splitLongText(line.text,maxC);
+                parts.forEach((part,pi)=>expanded.push({...line,text:part,_split:pi>0}));
+            } else { expanded.push(line); }
+        }
+        parsedResult.transcript=expanded;
+    }
     let words=0, html='';
     parsedResult.transcript.forEach((line,i)=>{
-        let text=line.text||''; words+=text.replace(/\s/g,'').length;
+        let text=esc(line.text||''); words+=(line.text||'').replace(/\s/g,'').length;
         if(useFH&&fatKeywords.length){
             fatKeywords.forEach(kw=>{
                 const re=new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
                 text=text.replace(re,'<mark class="fh">$&</mark>');
             });
         }
+        if(usePNA) text=annotateProperNouns(text);
         let spHtml = '';
         if (line.speaker && showDiar) {
             const { name: spName, color: spColor } = getSpeakerDisplay(line.speaker);
@@ -3103,7 +3243,11 @@ function updateAdminProjTab() {
 function autoSaveProject() {
     if(!parsedResult||!currentFile) return;
     const words=parsedResult.transcript.reduce((a,l)=>a+(l.text||'').replace(/\s/g,'').length,0);
-    const autoName = (currentFile.name||'錄音').replace(/\.[^.]+$/,'');
+    // 精準解碼檔名：支援中文、特殊字元、URL 編碼
+    let rawName = currentFile.name || '錄音';
+    try { rawName = decodeURIComponent(rawName); } catch(e) {}
+    // 移除副檔名（正確處理多個點的情況，如 "my.recording.2024.mp3" → "my.recording.2024"）
+    const autoName = rawName.replace(/\.[a-zA-Z0-9]{1,8}$/, '').trim() || rawName;
     if (!currentProjectId) { currentProjectName = autoName; }
     const trIn = document.getElementById('trNameInput');
     if (trIn) trIn.value = currentProjectName;
@@ -3327,6 +3471,33 @@ function permDeleteTrash(ti) {
     saveTrash(trash);
     renderTrash();
     toast('已永久刪除', 'ok');
+}
+
+function restoreAllTrash() {
+    const trash = getTrash();
+    if (!trash.length) { toast('垃圾桶是空的', 'err'); return; }
+    if (!confirm(`將全部 ${trash.length} 個專案還原至「未分類 › 主要」？`)) return;
+    const cats = getCategories();
+    if (!cats.length) cats.push({ id:Date.now(), name:'未分類', open:true, folders:[] });
+    if (!cats[0].folders.length) cats[0].folders.push({ id:Date.now()+1, name:'主要', open:true, projects:[] });
+    trash.forEach(item => {
+        const proj = JSON.parse(JSON.stringify(item.proj));
+        proj.id = Date.now() + Math.floor(Math.random()*9999);
+        cats[0].folders[0].projects.unshift(proj);
+    });
+    saveCats(cats);
+    saveTrash([]);
+    renderTrash();
+    toast(`已還原 ${trash.length} 個專案至「未分類 › 主要」`, 'ok');
+}
+
+function permDeleteAllTrash() {
+    const trash = getTrash();
+    if (!trash.length) { toast('垃圾桶是空的', 'err'); return; }
+    if (!confirm(`永久刪除垃圾桶內全部 ${trash.length} 個專案？此操作無法復原！`)) return;
+    saveTrash([]);
+    renderTrash();
+    toast(`已永久刪除 ${trash.length} 個專案`, 'ok');
 }
 
 function loadProject(id) {
@@ -4387,6 +4558,8 @@ function saveSettings() {
     if (parsedResult?.transcript) renderResults();
     closeModal('settingsModal');
     onModelChange();
+    // 廣播管理員設定版本，讓同瀏覽器其他分頁即時同步
+    localStorage.setItem('vf_admin_settings_v', String(Date.now()));
     toast('設定已儲存', 'ok');
 }
 
@@ -4716,7 +4889,7 @@ async function buildWaveform(file) {
     const pb = document.querySelector('.play-bar');
     if (pb) pb.classList.add('has-wave');
 
-    // ── Step 6: 波形點擊 + 拖拉 seek（同步上方進度條）──
+    // ── Step 6: 波形點擊 + 拖拉 seek（同步上方進度條 + 即時高亮逐字稿）──
     let _waveDrag = false;
     const _waveSeek = (clientX) => {
         if (!currentMedia || !currentMedia.duration) return;
@@ -4724,6 +4897,8 @@ async function buildWaveform(file) {
         const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
         currentMedia.currentTime = ratio * currentMedia.duration;
         updateSeekBar(currentMedia);
+        // 立即更新逐字稿高亮（無需等待 ontimeupdate 事件）
+        updateLiveSub(currentMedia.currentTime);
     };
     canvas.addEventListener('mousedown', e => {
         if (!currentMedia || !currentMedia.duration) return;
@@ -4949,7 +5124,7 @@ function srtToSecs(str) {
 }
 function secsToSRT(t) {
     if (t == null || isNaN(t) || !isFinite(t) || t < 0) t = 0;
-    const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60), ms=Math.round((t%1)*1000);
+    const h=Math.floor(t/3600), m=Math.floor((t%3600)/60), s=Math.floor(t%60), ms=Math.floor((t%1)*1000);
     return `${p2(h)}:${p2(m)}:${p2(s)},${String(ms).padStart(3,'0')}`;
 }
 function formatTC(srtStr) {
@@ -4960,7 +5135,7 @@ function formatTC(srtStr) {
         const h  = Math.floor(t / 3600);
         const m  = Math.floor((t % 3600) / 60);
         const s  = Math.floor(t % 60);
-        const ms = Math.round((t % 1) * 1000);
+        const ms = Math.floor((t % 1) * 1000);
         return `${p2(h)}:${p2(m)}:${p2(s)},${String(ms).padStart(3, '0')}`;
     }
     // 8碼 SMPTE HH:MM:SS:FF（使用 tcFps 影格率）
@@ -5305,27 +5480,24 @@ function initResizers() {
 // 匯出
 // ══════════════════════════════════════════
 function safeFilename(name) { return (name||'transcript').replace(/[\\/:*?"<>|]/g,'_'); }
-// 秒數 → SRT 時間戳 HH:MM:SS,mmm
+// 秒數 → SRT 時間戳 HH:MM:SS,mmm（純算術 Math.floor，避免毫秒進位溢位成 4 位）
 function secsToSRTTime(t) {
-    // Date-based: avoids floating-point rounding bugs (e.g. Math.round giving ms=1000)
-    // Use Math.floor(t/3600) for hours so values ≥ 24 h are not wrapped by getUTCHours()
-    const d  = new Date(Math.round(t * 1000));
-    const hh = String(Math.floor(t / 3600)).padStart(2, '0');
-    const mm = String(d.getUTCMinutes()).padStart(2, '0');
-    const ss = String(d.getUTCSeconds()).padStart(2, '0');
-    const ms = String(d.getUTCMilliseconds()).padStart(3, '0');
-    return `${hh}:${mm}:${ss},${ms}`;
+    if (!isFinite(t) || t < 0) t = 0;
+    const hh = Math.floor(t / 3600);
+    const mm = Math.floor((t % 3600) / 60);
+    const ss = Math.floor(t % 60);
+    const ms = Math.floor((t % 1) * 1000);
+    return `${p2(hh)}:${p2(mm)}:${p2(ss)},${String(ms).padStart(3,'0')}`;
 }
 async function exportSRT() {
     if (!parsedResult?.transcript) { toast('無轉錄結果', 'err'); return; }
 
     // 統一把各種格式的時間碼轉成合法 SRT 字串
+    // 永遠透過 srtToSecs → secsToSRTTime 正規化，修復任何歷史儲存的毫秒溢位格式
     const toSRTStr = v => {
         if (v == null || v === '') return '00:00:00,000';
-        if (typeof v === 'number') return secsToSRTTime(v);
-        const s = String(v).trim();
-        if (s.includes(':')) return s.includes(',') ? s : s.replace('.', ',');
-        return secsToSRTTime(parseFloat(s) || 0);
+        if (typeof v === 'number') return secsToSRTTime(isFinite(v) && v >= 0 ? v : 0);
+        return secsToSRTTime(srtToSecs(String(v).trim()));
     };
 
     let srtLines = [];
@@ -5340,8 +5512,8 @@ async function exportSRT() {
     });
     if (!srtLines.length) { toast('沒有可匯出的字幕段落', 'err'); return; }
 
-    // UTF-8 BOM + CRLF — Premiere / DaVinci / Final Cut / Resolve 最佳相容
-    const srtContent = '﻿' + srtLines.join('\r\n') + '\r\n';
+    // 無 BOM UTF-8 + CRLF — FCP / Resolve / Premiere 標準相容（BOM 會導致 FCP 拒絕匯入）
+    const srtContent = srtLines.join('\r\n') + '\r\n';
     const fname = safeFilename(currentProjectName) + '.srt';
 
     // ── 優先使用 File System Access API（不觸發 macOS quarantine 警告）──
