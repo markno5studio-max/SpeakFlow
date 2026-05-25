@@ -599,6 +599,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <option value="whisper-large-v3">OpenAI Whisper Large-v3（本地・極致精準・99語言）</option>
                         <option value="gemini-2.5-pro">Gemini 2.5 Pro（雲端・最精準）</option>
                         <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash（雲端・★最快速度）</option>
+                        <option value="openai-whisper-1">OpenAI Whisper-1（雲端・多語言・需 API 金鑰）</option>
                     </select>
                 </div>
             </div>
@@ -636,8 +637,15 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             <div id="geminiSection" style="display:none;">
                 <div id="apiKeyNotice" style="font-size:11.5px;color:var(--accent-red);padding:8px 12px;background:rgba(240,96,96,.08);border:1px solid rgba(240,96,96,.2);border-radius:var(--r-sm);margin-bottom:6px;display:none;">
                     ⚠ 尚未設定 Gemini API 金鑰。
-                    <span style="text-decoration:underline;cursor:pointer;margin-left:4px;" onclick="document.getElementById('settingsBtn').click()">點此前往後台設定填入 →</span>
+                    <span style="text-decoration:underline;cursor:pointer;margin-left:4px;" onclick="document.getElementById('settingsBtn').click()">點此前往後台設定 → 進階 填入 →</span>
                 </div>
+            </div>
+            <div id="openaiSection" style="display:none;">
+                <div id="openaiKeyNotice" style="font-size:11.5px;color:var(--accent-red);padding:8px 12px;background:rgba(240,96,96,.08);border:1px solid rgba(240,96,96,.2);border-radius:var(--r-sm);margin-bottom:6px;display:none;">
+                    ⚠ 尚未設定 OpenAI API 金鑰。
+                    <span style="text-decoration:underline;cursor:pointer;margin-left:4px;" onclick="document.getElementById('settingsBtn').click()">點此前往後台設定 → 進階 填入 →</span>
+                </div>
+                <p style="font-size:11px;color:var(--text-tertiary);margin-bottom:6px;">OpenAI Whisper-1：每分鐘音訊 $0.006 USD，支援多語言，最長 25MB。</p>
             </div>
 
             <div class="opt-strip">
@@ -1188,9 +1196,15 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 </div>
                 <hr class="divider">
                 <div class="s-sec">
-                    <div class="s-lbl">Gemini API 金鑰</div>
+                    <div class="s-lbl">Gemini API 金鑰（Google AI Studio）</div>
                     <input type="text" class="fi" id="sApiKey" placeholder="AIzaSy..." style="margin-bottom:5px;">
-                    <p style="font-size:11px;color:var(--text-tertiary);">前往 Google AI Studio 取得 API 金鑰。僅儲存於本機瀏覽器，不會上傳至任何伺服器。</p>
+                    <p style="font-size:11px;color:var(--text-tertiary);">前往 <strong>Google AI Studio</strong> (aistudio.google.com) 取得 API 金鑰，啟用 Gemini 2.5 Pro / Flash 雲端轉錄。</p>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">OpenAI API 金鑰（Whisper / GPT）</div>
+                    <input type="text" class="fi" id="sOpenAIKey" placeholder="sk-..." style="margin-bottom:5px;">
+                    <p style="font-size:11px;color:var(--text-tertiary);">前往 <strong>platform.openai.com</strong> 取得 API 金鑰，填入後即可使用 OpenAI Whisper-1 雲端轉錄（逐字稿精準度高，支援多語言）。金鑰僅儲存於本機，絕不上傳。</p>
                 </div>
                 <hr class="divider">
                 <div class="s-sec">
@@ -1738,9 +1752,12 @@ function goSection(id) {
 function onModelChange() {
     const m = document.getElementById('modelSelect').value;
     // 本地模式：包含一般本地 Whisper 和 Whisper Large-v3 兩種選項
-    const isLocal = m === 'local' || m === 'whisper-large-v3';
-    document.getElementById('localModelSection').style.display = isLocal ? 'block' : 'none';
-    document.getElementById('geminiSection').style.display = isLocal ? 'none' : 'block';
+    const isLocal   = m === 'local' || m === 'whisper-large-v3';
+    const isGemini  = m.startsWith('gemini-');
+    const isOpenAI  = m === 'openai-whisper-1';
+    document.getElementById('localModelSection').style.display = isLocal  ? 'block' : 'none';
+    document.getElementById('geminiSection').style.display     = isGemini ? 'block' : 'none';
+    document.getElementById('openaiSection').style.display     = isOpenAI ? 'block' : 'none';
     // 選擇 Large-v3 時，自動切換 Whisper 模型版本至 large-v3
     if (m === 'whisper-large-v3') {
         const wsel = document.getElementById('whisperModelSelect');
@@ -1752,11 +1769,15 @@ function onModelChange() {
             updateStartBtn();
         }
     }
+    // Gemini API 金鑰提示
     const apiKeyNotice = document.getElementById('apiKeyNotice');
-    if(!isLocal && (!gs('apiKey') || gs('apiKey').length < 10)) {
-        apiKeyNotice.style.display = 'block';
-    } else {
-        apiKeyNotice.style.display = 'none';
+    if (apiKeyNotice) {
+        apiKeyNotice.style.display = (isGemini && (!gs('apiKey') || gs('apiKey').length < 10)) ? 'block' : 'none';
+    }
+    // OpenAI API 金鑰提示
+    const openaiKeyNotice = document.getElementById('openaiKeyNotice');
+    if (openaiKeyNotice) {
+        openaiKeyNotice.style.display = (isOpenAI && (!gs('openAIKey') || gs('openAIKey').length < 10)) ? 'block' : 'none';
     }
     // 本地模式禁用不支援的選項
     document.getElementById('enableDiarization').disabled = isLocal;
@@ -1767,16 +1788,20 @@ function onModelChange() {
 
 function updateStartBtn() {
     const m = document.getElementById('modelSelect').value;
-    const isLocal = m === 'local' || m === 'whisper-large-v3';
+    const isLocal  = m === 'local' || m === 'whisper-large-v3';
+    const isGemini = m.startsWith('gemini-');
+    const isOpenAI = m === 'openai-whisper-1';
     const isMicMode = document.getElementById('modeMicBtn')?.classList.contains('btn-p');
     if (isMicMode) {
         // 麥克風模式：主開始按鈕隱藏，由 micStartBtn 控制
         document.getElementById('startBtn').disabled = true;
         return;
     }
-    const hasFile = !!currentFile;
-    const modelOk = !isLocal || localModelReady;
-    document.getElementById('startBtn').disabled = !hasFile || !modelOk;
+    const hasFile  = !!currentFile;
+    const localOk  = !isLocal || localModelReady;
+    const geminiOk = !isGemini || (gs('apiKey') && gs('apiKey').length >= 10);
+    const openaiOk = !isOpenAI || (gs('openAIKey') && gs('openAIKey').length >= 10);
+    document.getElementById('startBtn').disabled = !hasFile || !localOk || !geminiOk || !openaiOk;
 }
 
 // ══════════════════════════════════════════
@@ -1901,13 +1926,13 @@ async function initLocalModel() {
 
     // dtype 選擇策略：
     //   WebGPU → fp16（GPU 半精度）；若不支援自動降級 WASM
-    //   WASM tiny/base/small → q8（有完整量化檔，速度快）
-    //   WASM medium/large-v3 → 先嘗試 q8，若量化檔不存在（404）則回退 fp32
-    const getWasmDtype = (k) => (k === 'medium' || k === 'large-v3') ? 'q8' : 'q8';
-    const getFallbackDtype = (k, dev) => {
-        if (dev === 'webgpu') return 'fp32'; // fp16 不支援則改 fp32
-        return 'fp32'; // WASM q8 失敗則改 fp32
+    //   WASM tiny/base/small → q8（Xenova repo 有 _quantized.onnx，速度快）
+    //   WASM medium/large-v3 → 直接 fp32（Xenova v2 量化格式與 transformers.js v3 不相容）
+    const getWasmDtype = (k) => {
+        if (k === 'medium' || k === 'large-v3') return 'fp32';
+        return 'q8';
     };
+    const getFallbackDtype = (k, dev) => 'fp32';
 
     const tryLoad = async (dev, lbl, dtype) => pipeline('automatic-speech-recognition', modelId, {
         device: dev,
@@ -1921,26 +1946,20 @@ async function initLocalModel() {
         transcriber = await tryLoad(device, devLabel, primaryDtype);
     } catch(err) {
         const isWebGPUFail = device === 'webgpu';
-        const isFetchFail  = err.message && (
-            err.message.includes('404') || err.message.includes('fetch') ||
-            err.message.includes('not found') || err.message.includes('Failed to fetch') ||
-            err.message.includes('quantized') || err.message.includes('q8')
-        );
 
         if (isWebGPUFail) {
-            // WebGPU 失敗 → 降級 WASM
+            // WebGPU 失敗 → 降級 WASM fp32（最相容）
             device = 'wasm'; devLabel = 'WASM';
-            setModelStatus('ms-loading', '[WASM] WebGPU 不支援，切換 CPU 模式...', true);
+            setModelStatus('ms-loading', '[WASM] WebGPU 不支援，切換 CPU 模式 (fp32)...', true);
             const wasmDtype = getWasmDtype(key);
             try {
                 transcriber = await tryLoad('wasm', 'WASM', wasmDtype);
             } catch(err2) {
-                // WASM q8 也失敗 → 嘗試 fp32
-                const fb = getFallbackDtype(key, 'wasm');
-                if (fb !== wasmDtype) {
-                    setModelStatus('ms-loading', `[WASM] 量化檔案不存在，改用 fp32 載入（檔案較大）...`, true);
+                // WASM 也失敗（可能 q8 找不到）→ 嘗試 fp32
+                if (wasmDtype !== 'fp32') {
+                    setModelStatus('ms-loading', '[WASM] 改用 fp32 模式載入（檔案較大，請稍候）...', true);
                     try {
-                        transcriber = await tryLoad('wasm', 'WASM', fb);
+                        transcriber = await tryLoad('wasm', 'WASM', 'fp32');
                     } catch(err3) {
                         localModelLoading = false;
                         setModelStatus('ms-error', '載入失敗：' + err3.message.slice(0, 70), false);
@@ -1954,12 +1973,11 @@ async function initLocalModel() {
                     return;
                 }
             }
-        } else if (isFetchFail && primaryDtype !== 'fp32') {
-            // 量化檔案不存在（404）→ 回退 fp32
-            const fb = getFallbackDtype(key, device);
-            setModelStatus('ms-loading', `[${devLabel}] 量化檔案不存在，改用 fp32 載入（檔案較大，請稍候）...`, true);
+        } else if (primaryDtype !== 'fp32') {
+            // 任何非 fp32 載入失敗 → 自動以 fp32 重試（相容性最佳）
+            setModelStatus('ms-loading', `[${devLabel}] 改用 fp32 模式載入（相容性最佳，請稍候...）`, true);
             try {
-                transcriber = await tryLoad(device, devLabel, fb);
+                transcriber = await tryLoad(device, devLabel, 'fp32');
             } catch(err2) {
                 localModelLoading = false;
                 setModelStatus('ms-error', '載入失敗：' + err2.message.slice(0, 70), false);
@@ -2369,8 +2387,10 @@ async function startTranscription() {
     document.getElementById('startBtn').disabled=true;
 
     try {
-        if(model === 'local' || model === 'whisper-large-v3'){
+        if (model === 'local' || model === 'whisper-large-v3') {
             await runLocalTranscription(lt);
+        } else if (model === 'openai-whisper-1') {
+            await runOpenAITranscription(lt);
         } else {
             await runGeminiTranscription(model, lt);
         }
@@ -2590,6 +2610,89 @@ async function runGeminiTranscription(model, lt) {
     rawText = rawText.slice(jsonStart);
     // ── 嘗試解析 JSON；若被截斷則自動修復 ──
     parsedResult = sanitizeResult(recoverJSON(rawText), langCode, maxCh);
+}
+
+// ══════════════════════════════════════════
+// OpenAI Whisper-1 雲端轉錄
+// ══════════════════════════════════════════
+async function runOpenAITranscription(lt) {
+    const apiKey = gs('openAIKey');
+    if (!apiKey || apiKey.length < 10) throw new Error('請先在後台設定 → 進階 中填入 OpenAI API 金鑰。');
+
+    const langCode = document.getElementById('langSelect').value;
+    const wantTime = document.getElementById('enableTimestamps').checked;
+
+    // OpenAI Whisper-1 最大檔案 25MB，超出需裁切或提示
+    if (currentFile.size > 25 * 1024 * 1024) {
+        throw new Error('OpenAI Whisper-1 限制 25MB 以下的音訊檔。請選用 Gemini 或本地 Whisper 處理大型檔案。');
+    }
+
+    lt.textContent = 'OpenAI Whisper-1 上傳中，請稍候...';
+
+    // 語言代碼轉換（OpenAI 使用 ISO-639-1，zh-TW → zh）
+    const whisperLang = WHISPER_LANG[langCode] || langCode.split('-')[0];
+
+    const formData = new FormData();
+    formData.append('file', currentFile, currentFile.name || 'audio.mp3');
+    formData.append('model', 'whisper-1');
+    formData.append('language', whisperLang);
+    formData.append('response_format', 'verbose_json');
+    if (wantTime) {
+        formData.append('timestamp_granularities[]', 'segment');
+    }
+
+    lt.textContent = 'OpenAI Whisper-1 辨識中，請稍候...';
+
+    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+        body: formData
+    });
+
+    if (!resp.ok) {
+        const eb = await resp.json().catch(() => ({}));
+        const msg = eb?.error?.message || `HTTP ${resp.status}`;
+        if (resp.status === 401) throw new Error('OpenAI API 金鑰無效（401）。請至後台設定確認金鑰。');
+        if (resp.status === 429) throw new Error('OpenAI API 呼叫達上限（429）。請稍候再試。');
+        if (resp.status === 413) throw new Error('音訊檔案超過 25MB 限制，請壓縮後重試。');
+        throw new Error(`OpenAI 轉錄失敗：${msg}`);
+    }
+
+    const data = await resp.json();
+    lt.textContent = 'OpenAI Whisper-1 辨識完成，整理結果...';
+
+    // 將 OpenAI 回傳格式轉換為本系統標準格式
+    const maxCh = parseInt(document.getElementById('maxChars').value) || 20;
+    const segments = data.segments || [];
+
+    // 秒數 → HH:MM:SS,mmm 格式
+    const secToTC = (s) => {
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        const ms = Math.round((sec - Math.floor(sec)) * 1000);
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(Math.floor(sec)).padStart(2,'0')},${String(ms).padStart(3,'0')}`;
+    };
+
+    let transcript;
+    if (segments.length > 0) {
+        transcript = segments.map(seg => ({
+            start: wantTime ? secToTC(seg.start) : '',
+            end:   wantTime ? secToTC(seg.end)   : '',
+            speaker: '',
+            text: (seg.text || '').trim()
+        }));
+    } else {
+        // 無時間戳模式 — 整段文字按 maxCh 字元斷句
+        const fullText = (data.text || '').trim();
+        transcript = [];
+        for (let i = 0; i < fullText.length; i += maxCh) {
+            transcript.push({ start: '', end: '', speaker: '', text: fullText.slice(i, i + maxCh) });
+        }
+        if (!transcript.length) transcript.push({ start: '', end: '', speaker: '', text: fullText });
+    }
+
+    parsedResult = sanitizeResult({ transcript, chapters: [] }, langCode, maxCh);
 }
 
 // 解析 JSON；若截斷則嘗試多種修復策略
@@ -3805,17 +3908,8 @@ function doOAuthLogin(userData) {
 
 // ── 實際執行登入（寫入 sessionStorage、更新 UI）──
 function doOAuthLoginDirect(userData) {
-    // 若管理員 session 是綁定到某個特定 OAuth 用戶，且現在換成不同用戶，則清除管理員 session。
-    // 若 vf_admin_session_user 不存在（獨立管理員模式），則保留 admin session 不清除。
-    const storedAdminHash = localStorage.getItem('vf_admin_session_user');
-    if (storedAdminHash) {
-        // 有 hash 綁定 → 確認目前要登入的 email 是否吻合
-        const newHash = spHash((userData.email || '').toLowerCase().trim());
-        if (newHash !== storedAdminHash) {
-            clearAdminSession(); // 登入者不是 admin session 綁定的那個帳號 → 清除
-        }
-    }
-    // 無 hash 綁定（獨立管理員模式）→ 保留 admin session，讓管理員可同時看所有用戶資料
+    // 管理員 session 不綁定特定帳號身份，OAuth 用戶切換不影響管理員 session
+    // （保留 admin session，讓管理員可同時查看所有用戶資料）
     const stored = {
         name: userData.name,
         email: userData.email,
@@ -3901,8 +3995,7 @@ function switchToSession(key) {
             toast('此帳號工作階段已過期，請重新登入', 'err');
             openLogin(); return;
         }
-        // 切換帳號時清除管理員 session（避免舊 admin token 污染新帳號）
-        clearAdminSession();
+        // 管理員 session 不綁定帳號身份，切換帳號不影響管理員 session
         sessionStorage.setItem('vf_user', JSON.stringify(s.user));
         applyUserPreferences(); // 套用新帳號的個人偏好
         updateUserUI();
@@ -4061,13 +4154,7 @@ function switchToSessionSilent(key) {
             toast('帳號工作階段已過期，請重新登入', 'err');
             renderSidebarOtherAccounts(); return;
         }
-        // 若管理員 session 有 hash 綁定，且切換的帳號 hash 不符，才清除 admin session
-        // 若無 hash 綁定（獨立管理員模式），保留 admin session 不影響
-        const storedAdminHash = localStorage.getItem('vf_admin_session_user');
-        if (storedAdminHash) {
-            const newHash = spHash((s.user.email || '').toLowerCase().trim());
-            if (newHash !== storedAdminHash) clearAdminSession();
-        }
+        // 管理員 session 不綁定特定帳號身份，切換帳號不影響管理員 session
         sessionStorage.setItem('vf_user', JSON.stringify(s.user));
         applyUserPreferences();
         updateUserUI();
@@ -4080,41 +4167,26 @@ function switchToSessionSilent(key) {
 // 後台設定 (Admin Gate)
 // ══════════════════════════════════════════
 function isAdminSessionValid() {
-    if (Date.now() >= parseInt(localStorage.getItem('vf_admin_session') || '0')) return false;
-    const storedHash = localStorage.getItem('vf_admin_session_user');
-    try {
-        const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
-        if (!storedHash) {
-            // 獨立管理員 session（無 hash 綁定）：僅在無 OAuth 用戶時有效
-            // 若有 OAuth 用戶登入，需重新透過管理員密碼取得綁定 session
-            return !u;
-        }
-        // 有 hash 綁定 → 必須有 OAuth 用戶且 hash 吻合
-        if (!u) return false;
-        const curHash = spHash((u.email || '').toLowerCase().trim());
-        return storedHash === curHash;
-    } catch(e) { return false; }
+    // 管理員 session 純靠時間戳驗證，不綁定特定 OAuth 身份
+    // 不同裝置 / 不同用戶帳號皆可同時持有有效管理員 session
+    return Date.now() < parseInt(localStorage.getItem('vf_admin_session') || '0');
 }
 function saveAdminSession() {
     // 計算 session 時效：讀取後台設定，預設 24 小時，0 = 永不到期
     const hours = parseInt(gs('adminSessionHours') || '24');
     const expiry = hours === 0 ? 9999999999999 : Date.now() + (hours * 3600 * 1000);
     localStorage.setItem('vf_admin_session', String(expiry));
+    // 移除舊版 hash 綁定（不限制帳號身份）
+    localStorage.removeItem('vf_admin_session_user');
+    // 記錄誰啟動了管理員 session（僅供側欄顯示，不影響驗證邏輯）
     try {
         const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
         if (u?.email) {
-            // 有 OAuth 用戶時，綁定 hash（防止不同用戶誤用同一 admin session）
-            localStorage.setItem('vf_admin_session_user', spHash(u.email.toLowerCase().trim()));
-            // 記錄誰啟動了管理員 session
             localStorage.setItem('vf_admin_login_by', JSON.stringify({ name: u.name, email: u.email }));
         } else {
-            // 無 OAuth 用戶（獨立管理員模式）→ 不綁定 hash
-            localStorage.removeItem('vf_admin_session_user');
             localStorage.setItem('vf_admin_login_by', JSON.stringify({ name: '直接登入', email: '' }));
         }
-    } catch(e) {
-        localStorage.removeItem('vf_admin_session_user');
-    }
+    } catch(e) {}
 }
 function clearAdminSession() {
     localStorage.removeItem('vf_admin_session');
@@ -4162,6 +4234,8 @@ function doAdminLogin() {
 
 function adminLogout() {
     clearAdminSession();
+    // 若目前在「所有用戶」專案視圖，登出後切回個人專案頁
+    if (typeof projView !== 'undefined' && projView === 'admin') setProjView('all');
     updateUserUI();
     updateAdminBtn(); // 按鈕恢復「管理員登入」
     closeModal('settingsModal');
@@ -4184,6 +4258,8 @@ function openSettings() {
     document.getElementById('sName').value=gs('siteName');
     document.getElementById('sTitle').value=gs('pageTitle');
     document.getElementById('sApiKey').value=gs('apiKey');
+    const soKey = document.getElementById('sOpenAIKey');
+    if (soKey) soKey.value = gs('openAIKey') || '';
     document.getElementById('sGoogleClientId').value=gs('googleClientId');
     document.getElementById('sFacebookAppId').value=gs('facebookAppId');
     document.getElementById('sNewUser').value = gs('adminUser') || '';
@@ -4244,6 +4320,8 @@ function saveSettings() {
     if(name) ss('siteName',name);
     if(title) ss('pageTitle',title);
     if(apiKeyEl) ss('apiKey', apiKey);
+    const openAIKeyEl = document.getElementById('sOpenAIKey');
+    if (openAIKeyEl) ss('openAIKey', openAIKeyEl.value.trim());
     const newGoogleId = document.getElementById('sGoogleClientId')?.value.trim()||'';
     const newFbId     = document.getElementById('sFacebookAppId')?.value.trim()||'';
     ss('googleClientId', newGoogleId);
