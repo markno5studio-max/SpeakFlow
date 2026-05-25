@@ -294,6 +294,8 @@ textarea.fi{resize:vertical;}
 /* 管理員在線狀態 */
 #settingsBtn[data-admin="on"]{color:var(--accent-green)!important;}
 #adminBtnLabel{flex:1;}
+/* settingsBtn 子列（標題列）內的 icon 不跟著 column flex 排列 */
+#settingsBtn > div:first-child{width:100%;}
 
 /* ─── PLAY BAR ─── */
 .play-bar{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--r-lg) var(--r-lg);transition:border-radius .15s;}
@@ -504,17 +506,16 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <div class="user-sub" id="userSub">訪客模式</div>
             </div>
         </div>
-        <!-- 其他已記住的帳號（可一鍵切換，動態生成）-->
+        <!-- 管理員在線時，顯示所有帳號（僅管理員可見）-->
         <div id="sbOtherAccounts"></div>
-        <!-- 個人設定：固定在上方，永遠顯示 -->
-        <div class="sb-settings" id="userPrefsBtn" onclick="openUserSettings()" style="font-size:11.5px;padding:7px 12px;">
-            <i class="fas fa-sliders" style="font-size:11px;"></i> 個人設定
-        </div>
         <!-- 管理員登入/在線：固定在最下方，永遠可見 -->
-        <div class="sb-settings" id="settingsBtn" style="justify-content:flex-start;">
-            <i class="fas fa-lock" id="adminBtnIcon" style="width:14px;text-align:center;font-size:12px;"></i>
-            <span id="adminBtnLabel">管理員登入</span>
-            <span id="adminOnlineDot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--accent-green);margin-left:auto;flex-shrink:0;box-shadow:0 0 6px rgba(61,212,154,.9);"></span>
+        <div class="sb-settings" id="settingsBtn" style="justify-content:flex-start;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 12px;">
+            <div style="display:flex;align-items:center;gap:8px;width:100%;">
+                <i class="fas fa-lock" id="adminBtnIcon" style="width:14px;text-align:center;font-size:12px;flex-shrink:0;"></i>
+                <span id="adminBtnLabel">管理員登入</span>
+                <span id="adminOnlineDot" style="display:none;width:8px;height:8px;border-radius:50%;background:var(--accent-green);margin-left:auto;flex-shrink:0;box-shadow:0 0 6px rgba(61,212,154,.9);"></span>
+            </div>
+            <div id="adminLoginBy" style="display:none;font-size:10px;color:var(--accent-green);opacity:.75;padding-left:22px;"></div>
         </div>
     </div>
 </aside>
@@ -969,6 +970,17 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <div><label class="fl">管理員帳號</label><input type="text" class="fi" id="sNewUser" placeholder="管理員帳號"></div>
                         <div><label class="fl">管理員密碼</label><input type="password" class="fi" id="sNewPass" placeholder="管理員密碼"></div>
                     </div>
+                    <div style="margin-top:8px;">
+                        <label class="fl">管理員工作階段時效</label>
+                        <select class="fs" id="sAdminSessionTimeout">
+                            <option value="1">1 小時後自動登出</option>
+                            <option value="4">4 小時後自動登出</option>
+                            <option value="8">8 小時後自動登出</option>
+                            <option value="24" selected>24 小時後自動登出（預設）</option>
+                            <option value="0">永不自動登出</option>
+                        </select>
+                        <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">也可隨時手動點擊「登出管理員」。</p>
+                    </div>
                 </div>
             </div>
 
@@ -1302,6 +1314,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <div class="s-sec">
                     <div class="s-lbl">自動登出設定</div>
                     <select class="fs" id="sPrefsTimeout">
+                        <option value="-2">關閉網頁就登出（重開頁面需重新登入）</option>
                         <option value="0">永不自動登出</option>
                         <option value="15">15 分鐘後登出</option>
                         <option value="30">30 分鐘後登出</option>
@@ -2301,7 +2314,7 @@ async function startTranscription() {
     document.getElementById('startBtn').disabled=true;
 
     try {
-        if(model === 'local'){
+        if(model === 'local' || model === 'whisper-large-v3'){
             await runLocalTranscription(lt);
         } else {
             await runGeminiTranscription(model, lt);
@@ -3766,12 +3779,13 @@ function doOAuthLoginDirect(userData) {
 // ── 點擊側欄使用者列 → 顯示帳號資訊彈窗 ──
 function openLogin() {
     const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
-    if (!u) { showAuthGate(); return; }
+    const isAdmin = isAdminUser();
+    // 若無用戶且非管理員，直接顯示登入牆
+    if (!u && !isAdmin) { showAuthGate(); return; }
 
     // Build session list
     const sessions = [];
-    // Current session
-    sessions.push({ key: 'current', user: u, isCurrent: true });
+    if (u) sessions.push({ key: 'current', user: u, isCurrent: true });
     // Check remembered sessions (vf_remember_*)
     for (const k of Object.keys(localStorage)) {
         if (!k.startsWith('vf_remember_')) continue;
@@ -3781,28 +3795,34 @@ function openLogin() {
             const expiry = s.expiry || 0;
             if (expiry !== 0 && Date.now() > expiry) { localStorage.removeItem(k); continue; }
             // Don't duplicate current user
-            if ((s.user.email || '').toLowerCase() === (u.email || '').toLowerCase()) continue;
+            if (u && (s.user.email || '').toLowerCase() === (u.email || '').toLowerCase()) continue;
             sessions.push({ key: k, user: s.user, isCurrent: false });
         } catch(e) {}
     }
 
     const body = document.getElementById('loginModalBody');
     if (body) {
-        body.innerHTML = sessions.map(s => `
+        const rows = sessions.map(s => {
+            const isCur = s.isCurrent;
+            return `
             <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
                 <div style="width:38px;height:38px;border-radius:50%;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;background:${esc(s.user.color||'#888')};">
-                    ${s.user.picture ? `<img src="${esc(s.user.picture)}" style="width:100%;height:100%;object-fit:cover;">` : esc((s.user.name||'?')[0].toUpperCase())}
+                    ${s.user.picture ? `<img src="${esc(s.user.picture)}" style="width:100%;height:100%;object-fit:cover;" referrerpolicy="no-referrer">` : esc((s.user.name||'?')[0].toUpperCase())}
                 </div>
                 <div style="flex:1;min-width:0;">
                     <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.user.name||'未知')}</div>
-                    <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.user.email||'')} ${s.isCurrent ? '<span style="color:var(--primary);font-size:10px;">● 目前</span>' : ''}</div>
+                    <div style="font-size:11px;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.user.email||'')}${isCur ? ' <span style="color:var(--primary);font-size:10px;">● 目前</span>' : ''}</div>
                 </div>
-                ${!s.isCurrent ? `<button class="btn btn-p" style="font-size:11px;padding:4px 10px;flex-shrink:0;" onclick="switchToSession('${esc(s.key)}')"><i class="fas fa-arrows-rotate"></i> 切換</button>` : ''}
-                <button class="btn btn-danger" style="font-size:11px;padding:4px 10px;flex-shrink:0;" onclick="doLogoutSession('${esc(s.key)}','${esc(s.user.email||'')}')">
-                    <i class="fas fa-right-from-bracket"></i> 登出
-                </button>
-            </div>
-        `).join('') + `
+                <div style="display:flex;gap:5px;flex-shrink:0;">
+                    ${isCur ? `<button class="btn" style="font-size:11px;padding:4px 9px;" onclick="closeModal('loginModal');openUserSettings()" title="個人設定"><i class="fas fa-sliders"></i></button>` : `<button class="btn btn-p" style="font-size:11px;padding:4px 9px;" onclick="switchToSession('${esc(s.key)}')" title="切換帳號"><i class="fas fa-arrows-rotate"></i></button>`}
+                    <button class="btn btn-danger" style="font-size:11px;padding:4px 9px;" onclick="doLogoutSession('${esc(s.key)}','${esc(s.user.email||'')}')" title="登出">
+                        <i class="fas fa-right-from-bracket"></i>
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+
+        body.innerHTML = rows + `
             <div style="display:flex;gap:8px;margin-top:14px;">
                 <button class="btn btn-full" onclick="doSwitchAccount()"><i class="fas fa-plus"></i> 新增帳號</button>
             </div>
@@ -3908,6 +3928,7 @@ function updateAdminBtn() {
     const dot = document.getElementById('adminOnlineDot');
     const ico = document.getElementById('adminBtnIcon');
     const btn = document.getElementById('settingsBtn');
+    const byEl = document.getElementById('adminLoginBy');
     if (!btn) return;
     const isAdmin = isAdminUser();
     if (lbl) lbl.textContent = isAdmin ? '管理員在線' : '管理員登入';
@@ -3915,12 +3936,27 @@ function updateAdminBtn() {
     if (ico) ico.className = isAdmin ? 'fas fa-shield-halved' : 'fas fa-lock';
     btn.style.color = isAdmin ? 'var(--accent-green)' : '';
     btn.dataset.admin = isAdmin ? 'on' : 'off';
+    // 顯示是誰啟動了管理員 session
+    if (byEl) {
+        if (isAdmin) {
+            try {
+                const by = JSON.parse(localStorage.getItem('vf_admin_login_by') || 'null');
+                const txt = by?.email ? `由 ${by.name} 登入` : (by?.name ? by.name : '');
+                byEl.textContent = txt;
+                byEl.style.display = txt ? 'block' : 'none';
+            } catch(e) { byEl.style.display = 'none'; }
+        } else {
+            byEl.style.display = 'none';
+        }
+    }
 }
 
-// ── 渲染側欄其他已記住的帳號（一鍵切換）──
+// ── 渲染側欄其他帳號（僅管理員在線時顯示所有帳號）──
 function renderSidebarOtherAccounts() {
     const container = document.getElementById('sbOtherAccounts');
     if (!container) return;
+    // 非管理員：不顯示其他帳號列，帳號切換需透過帳號資訊 Modal
+    if (!isAdminUser()) { container.innerHTML = ''; return; }
     const currentUser = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
     const others = [];
     for (const k of Object.keys(localStorage)) {
@@ -3934,7 +3970,11 @@ function renderSidebarOtherAccounts() {
             others.push({ user: s.user, key: k });
         } catch(e) {}
     }
-    if (!others.length) { container.innerHTML = ''; return; }
+    if (!others.length) {
+        // 管理員在線但無其他帳號
+        container.innerHTML = `<div style="font-size:10px;color:var(--text-tertiary);padding:4px 12px 6px;">— 目前無其他帳號 —</div>`;
+        return;
+    }
     container.innerHTML = others.map(s => {
         const initials = (s.user.name || '?')[0].toUpperCase();
         const avBg = s.user.picture ? 'transparent' : (s.user.color || '#555');
@@ -3944,7 +3984,7 @@ function renderSidebarOtherAccounts() {
         return `<div class="sb-alt-row" onclick="switchToSessionSilent('${esc(s.key)}')" title="切換至 ${esc(s.user.name)}">
             <div class="sb-alt-av" style="background:${esc(avBg)};">${avContent}</div>
             <span class="sb-alt-name">${esc(s.user.name)}</span>
-            <i class="fas fa-right-to-bracket sb-alt-switch"></i>
+            <i class="fas fa-right-to-bracket sb-alt-switch" style="margin-left:auto;font-size:10px;opacity:.5;"></i>
         </div>`;
     }).join('');
 }
@@ -3995,15 +4035,21 @@ function isAdminSessionValid() {
     } catch(e) { return false; }
 }
 function saveAdminSession() {
-    localStorage.setItem('vf_admin_session', Date.now() + 86400000); // 24 小時
+    // 計算 session 時效：讀取後台設定，預設 24 小時，0 = 永不到期
+    const hours = parseInt(gs('adminSessionHours') || '24');
+    const expiry = hours === 0 ? 9999999999999 : Date.now() + (hours * 3600 * 1000);
+    localStorage.setItem('vf_admin_session', String(expiry));
     try {
         const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
         if (u?.email) {
             // 有 OAuth 用戶時，綁定 hash（防止不同用戶誤用同一 admin session）
             localStorage.setItem('vf_admin_session_user', spHash(u.email.toLowerCase().trim()));
+            // 記錄誰啟動了管理員 session
+            localStorage.setItem('vf_admin_login_by', JSON.stringify({ name: u.name, email: u.email }));
         } else {
-            // 無 OAuth 用戶（獨立管理員模式）→ 不綁定 hash，isAdminSessionValid 將無條件接受
+            // 無 OAuth 用戶（獨立管理員模式）→ 不綁定 hash
             localStorage.removeItem('vf_admin_session_user');
+            localStorage.setItem('vf_admin_login_by', JSON.stringify({ name: '直接登入', email: '' }));
         }
     } catch(e) {
         localStorage.removeItem('vf_admin_session_user');
@@ -4012,6 +4058,7 @@ function saveAdminSession() {
 function clearAdminSession() {
     localStorage.removeItem('vf_admin_session');
     localStorage.removeItem('vf_admin_session_user');
+    localStorage.removeItem('vf_admin_login_by');
     localStorage.removeItem('vf_admin_identity'); // 向下相容清理
     // 若當前 session 是舊版純管理員身份（provider=admin），清除之，回到訪客狀態
     try {
@@ -4080,6 +4127,8 @@ function openSettings() {
     document.getElementById('sFacebookAppId').value=gs('facebookAppId');
     document.getElementById('sNewUser').value = gs('adminUser') || '';
     document.getElementById('sNewPass').value = gs('adminPass') || '';
+    const sast = document.getElementById('sAdminSessionTimeout');
+    if (sast) sast.value = gs('adminSessionHours') || '24';
     document.getElementById('sModelSize').value=gs('modelSize');
     const stcf = document.getElementById('sTCFormat');
     if (stcf) stcf.value = localStorage.getItem('vf_tc_format') || '8';
@@ -4152,6 +4201,9 @@ function saveSettings() {
     if(np) ss('adminPass', np);
     else if(!gs('adminPass')) ss('adminPass','mark888');
     if(ms) ss('modelSize',ms);
+    // 管理員 session 時效
+    const sast = document.getElementById('sAdminSessionTimeout');
+    if (sast) ss('adminSessionHours', sast.value);
     // TC format
     const stcf = document.getElementById('sTCFormat');
     if (stcf) {
@@ -4211,14 +4263,17 @@ function openUserSettings() {
     if (u?.email) {
         const hash = spHash((u.email || '').toLowerCase().trim());
         const sto = document.getElementById('sPrefsTimeout');
-        if (sto) sto.value = localStorage.getItem('vf_sess_pref_' + hash) || '0';
+        if (sto) {
+            const saved = localStorage.getItem('vf_sess_pref_' + hash);
+            sto.value = (saved !== null) ? saved : '0';
+        }
     }
     // Sync colour pickers with per-user values (gup falls back to global if no override)
     document.querySelectorAll('.cpw[data-key]').forEach(cpw => syncCPW(cpw, gup(cpw.dataset.key)));
     // Set modal title
     const ttl = document.querySelector('#settingsModal .m-ttl');
     if (ttl) ttl.innerHTML = '<i class="fas fa-sliders" style="color:var(--primary);margin-right:7px;"></i>個人偏好設定';
-    // Show user-only tabs, hide admin tabs
+    // Show user-only tabs (colors + prefs), hide admin-only tabs
     const adminTabs = ['general', 'advanced', 'access'];
     document.querySelectorAll('.tab-btn[data-for-tab]').forEach(btn => {
         const forTab = btn.getAttribute('data-for-tab');
@@ -4228,7 +4283,7 @@ function openUserSettings() {
     // Hide admin logout button in settings
     const adminLogoutBtn = document.getElementById('settingsAdminLogoutBtn');
     if (adminLogoutBtn) adminLogoutBtn.style.display = 'none';
-    switchTab('colors');
+    switchTab('prefs');
     document.getElementById('settingsModal').classList.add('show');
 }
 
@@ -4251,14 +4306,13 @@ function saveUserPrefs() {
         const fpsSel = document.getElementById('tcFpsSel');
         if (fpsSel) fpsSel.value = String(tcFps);
     }
-    // ── Session timeout ── (already per-user via vf_sess_pref_{hash}, unchanged)
+    // ── Session timeout ── (per-user，支援 -2=關閉就登出, 0=永不, 正數=分鐘)
     const sto = document.getElementById('sPrefsTimeout');
     if (sto) {
         const u = JSON.parse(sessionStorage.getItem('vf_user') || 'null');
         if (u?.email) {
             const hash = spHash((u.email || '').toLowerCase().trim());
-            const mins = parseInt(sto.value) || 0;
-            localStorage.setItem('vf_sess_pref_' + hash, String(mins));
+            localStorage.setItem('vf_sess_pref_' + hash, sto.value); // 直接存原始字串（-2, 0, 正數）
             applyRememberPreference(u);
         }
     }
@@ -4275,7 +4329,14 @@ function saveUserPrefs() {
 function applyRememberPreference(userData) {
     const hash = spHash((userData.email || '').toLowerCase().trim());
     const prefKey = 'vf_sess_pref_' + hash;
-    let timeoutMins = parseInt(localStorage.getItem(prefKey) || '-1');
+    const rawPref = localStorage.getItem(prefKey);
+    let timeoutMins = parseInt(rawPref || '-1');
+
+    // 特殊值 -2：關閉網頁就登出（不儲存 remember session，sessionStorage 關閉即清空）
+    if (rawPref === '-2') {
+        localStorage.removeItem('vf_remember_' + hash); // 確保不留殘存 remember 記錄
+        return; // 不設定計時器，也不寫入 localStorage
+    }
 
     // Check global override from admin
     const globalTimeout = parseInt(gs('globalTimeout') || '0');
@@ -4286,8 +4347,7 @@ function applyRememberPreference(userData) {
         if (timeoutMins === -1) timeoutMins = globalTimeout;
     }
 
-    // 預設：永不過期（expiry=0），用戶可在個人設定中改為定時登出
-    // 管理員的全局逾時設定優先覆蓋個人設定
+    // 預設：永不過期（expiry=0）
     if (timeoutMins === -1) timeoutMins = 0;
 
     // Save remember session to localStorage
