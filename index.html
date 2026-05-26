@@ -179,11 +179,11 @@ mark.fh{background:rgba(var(--primary-rgb),.22);color:var(--text-primary);paddin
 .ac-reject-btn{padding:3px 10px;font-size:11.5px;background:rgba(240,96,96,.1);border:1px solid rgba(240,96,96,.25);color:var(--accent-red);border-radius:var(--r-sm);cursor:pointer;transition:var(--t);margin-left:4px;}
 .ts-tag{color:var(--primary);font-size:10px;font-weight:700;margin-right:6px;opacity:.75;}
 .ch-list{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:6px;max-height:360px;overflow-y:auto;}
-.chi{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-radius:var(--r-sm);transition:var(--t);border-bottom:1px solid rgba(255,255,255,.04);}
+.chi{display:flex;align-items:flex-start;gap:8px;padding:6px 9px;border-radius:var(--r-sm);transition:var(--t);border-bottom:1px solid rgba(255,255,255,.04);}
 .chi:last-child{border-bottom:none;}
 .chi:hover{background:rgba(255,255,255,.05);}
-.cht{color:#fff;font-weight:800;font-size:14px;white-space:nowrap;background:rgba(var(--primary-rgb),.18);border:1px solid rgba(var(--primary-rgb),.35);padding:2px 8px;border-radius:5px;letter-spacing:.5px;flex-shrink:0;line-height:1.6;}
-.chl{font-size:13.5px;color:var(--text-primary);line-height:1.55;padding-top:3px;}
+.cht{color:#fff;font-weight:800;font-size:11px;white-space:nowrap;background:rgba(var(--primary-rgb),.18);border:1px solid rgba(var(--primary-rgb),.35);padding:1px 6px;border-radius:4px;letter-spacing:.3px;flex-shrink:0;line-height:1.6;}
+.chl{font-size:11.5px;color:var(--text-primary);line-height:1.5;padding-top:2px;}
 mark.pn{background:rgba(74,124,247,.15);color:#7aaaf8;padding:0 3px;border-radius:3px;font-weight:700;border-bottom:2px dashed #4a7cf7;cursor:help;}
 mark.pn.nr{background:rgba(61,212,154,.13);color:#3dd49a;border-bottom-color:#3dd49a;}
 
@@ -821,7 +821,10 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             <div class="ed-resizer" id="edResizer" title="拖曳調整寬度"></div>
             <!-- 右：字幕樣式控制 -->
             <div class="ctrl-pane" id="edRight">
-                <div class="c-ttl" style="margin-bottom:13px;"><i class="fas fa-palette"></i> 字幕樣式</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;">
+                    <div class="c-ttl"><i class="fas fa-palette"></i> 字幕樣式</div>
+                    <button class="btn" id="chPanelToggleBtn" onclick="toggleChapterPanel()" style="padding:3px 8px;font-size:11px;opacity:0.55;" title="顯示章節面板"><i class="fas fa-list-check"></i> 章節</button>
+                </div>
                 <div style="margin-bottom:11px;">
                     <label class="fl">字體</label>
                     <select class="fs" id="subFont" onchange="applySubStyle()">
@@ -890,7 +893,6 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <button class="btn" onclick="translateTranscript('zh','en')" title="將逐字稿全文翻譯為英文（需 Gemini API）"><i class="fas fa-earth-americas"></i> 中→英</button>
                         <button class="btn" onclick="translateTranscript('en','zh-TW')" title="將逐字稿全文翻譯為繁體中文（需 Gemini API）"><i class="fas fa-earth-asia"></i> 英→中</button>
                         <button class="btn" onclick="reapplyHighlights()"><i class="fas fa-highlighter"></i> 套用標記</button>
-                        <button class="btn" id="showChaptersBtn" onclick="toggleChapterPanel()" style="display:none;" title="展開章節面板"><i class="fas fa-list-check"></i> 章節</button>
                         <!-- 逐字稿文字大小 -->
                         <div style="display:flex;align-items:center;gap:2px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px 4px;">
                             <button onclick="adjustTranscriptFontSize(-2)" title="縮小文字" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:2px 5px;font-size:12px;font-weight:700;line-height:1;">A-</button>
@@ -3402,9 +3404,13 @@ function renderResults() {
     const hasCh=parsedResult.chapters?.length>0;
     // 若用戶已手動隱藏章節面板，不強制顯示
     document.getElementById('chaptersContainer').style.display = (hasCh && !_chPanelHidden) ? 'flex' : 'none';
-    // 更新「顯示章節」按鈕
-    const showChBtn = document.getElementById('showChaptersBtn');
-    if (showChBtn) showChBtn.style.display = (hasCh && _chPanelHidden) ? '' : 'none';
+    // 更新 ctrl-pane 章節切換按鈕狀態
+    const chToggleBtn = document.getElementById('chPanelToggleBtn');
+    if (chToggleBtn) {
+        const showing = hasCh && !_chPanelHidden;
+        chToggleBtn.style.opacity = showing ? '1' : '0.55';
+        chToggleBtn.title = showing ? '隱藏章節面板' : (hasCh ? '顯示章節面板' : '（尚無章節）');
+    }
     // 有章節時確保列表展開，重置收合圖示
     if(hasCh){
         const cl=document.getElementById('chapterList');
@@ -5516,16 +5522,18 @@ let _chPanelHidden = false; // 用戶手動隱藏章節面板
 function toggleChapterPanel() {
     _chPanelHidden = !_chPanelHidden;
     const panel = document.getElementById('chaptersContainer');
-    const showBtn = document.getElementById('showChaptersBtn');
+    const toggleBtn = document.getElementById('chPanelToggleBtn');
     if (!panel) return;
     if (_chPanelHidden) {
         panel.style.display = 'none';
-        if (showBtn) showBtn.style.display = '';
+        // 按鈕變暗：提示章節已隱藏，點擊可展開
+        if (toggleBtn) { toggleBtn.style.opacity = '0.55'; toggleBtn.title = '顯示章節面板'; }
     } else {
         // 只有在有章節內容時才顯示面板
         const hasCh = parsedResult?.chapters?.length > 0;
         panel.style.display = hasCh ? 'flex' : 'none';
-        if (showBtn) showBtn.style.display = (!hasCh) ? '' : 'none';
+        // 按鈕亮起：章節面板已顯示
+        if (toggleBtn) { toggleBtn.style.opacity = hasCh ? '1' : '0.55'; toggleBtn.title = hasCh ? '隱藏章節面板' : '（尚無章節）'; }
     }
 }
 
@@ -5915,31 +5923,87 @@ async function exportSRT() {
     document.getElementById('srtFormatModal').classList.add('show');
 }
 
-async function doExportSRT(format) {
+// 建立標準 SRT 內容字串（純文字 CRLF，無 BOM）
+function buildSRTContent(lines) {
+    const blocks = [];
+    let seq = 1;
+    lines.forEach(l => {
+        if (!l.text?.trim()) return;
+        // 去除 HTML 標記；將文字內部換行統一為 CRLF，防止混合行尾破壞格式
+        const txt = l.text.trim().replace(/<[^>]+>/g, '').replace(/\r?\n/g, '\r\n');
+        if (!txt) return;
+        blocks.push(`${seq}\r\n${secsToSRTTime(l.start)} --> ${secsToSRTTime(l.end)}\r\n${txt}\r\n`);
+        seq++;
+    });
+    // 每個 block 已含結尾 \r\n；join('\r\n') 加入區塊間空行 → 標準 SRT 格式
+    return blocks.join('\r\n') + '\r\n';
+}
+
+// ── doExportSRT：同步呼叫 showSaveFilePicker（不用 await，保留使用者手勢上下文）
+function doExportSRT(format) {
     closeModal('srtFormatModal');
     if (!_srtLines?.length) { toast('無字幕資料，請重新點擊 SRT 按鈕', 'err'); return; }
     const lines = _srtLines;
     const baseName = safeFilename(currentProjectName || 'transcript');
 
+    // ── 同步建立檔案內容（在 showSaveFilePicker 呼叫前完成，不能有 await）
+    let content, ext, successMsg;
     if (format === 'ass') {
-        // ASS 格式：無黑底方塊，白字黑邊輪廓
-        const assContent = buildASSContent(lines);
-        await saveSubtitleFile(baseName + '.ass', assContent, '.ass');
-        toast('ASS 無黑底字幕已匯出 ✓', 'ok');
+        content    = buildASSContent(lines);
+        ext        = '.ass';
+        successMsg = 'ASS 無黑底字幕已匯出 ✓';
     } else {
-        // 標準純文字 SRT（無 BOM UTF-8 + CRLF）
-        let blocks = [];
-        let seq = 1;
-        lines.forEach(l => {
-            if (!l.text?.trim()) return;
-            const txt = l.text.trim().replace(/<[^>]+>/g, ''); // 去除 HTML 標記，確保純文字
-            blocks.push(`${seq}\r\n${secsToSRTTime(l.start)} --> ${secsToSRTTime(l.end)}\r\n${txt}\r\n`);
-            seq++;
+        content    = buildSRTContent(lines);
+        ext        = '.srt';
+        successMsg = 'SRT 已匯出 ✓';
+        if (!content.trim()) { toast('沒有可匯出的字幕段落', 'err'); return; }
+    }
+    const fname = baseName + ext;
+
+    // ── 優先使用 File System Access API（無 quarantine，Mac 可直接開啟）
+    // 關鍵：必須在此處同步呼叫，不能有任何 await 在前——否則 Safari/Chrome 手勢上下文失效
+    if (window.showSaveFilePicker) {
+        const extLabel = ext === '.srt' ? 'SubRip Subtitle' : 'Advanced SubStation Alpha';
+        window.showSaveFilePicker({
+            suggestedName: fname,
+            types: [{ description: `${extLabel} (*${ext})`, accept: { 'text/plain': [ext] } }]
+        })
+        .then(handle => handle.createWritable())
+        .then(writable => {
+            const bytes = new TextEncoder().encode(content); // 無 BOM UTF-8
+            return writable.write(bytes).then(() => writable.close());
+        })
+        .then(() => toast(successMsg, 'ok'))
+        .catch(e => {
+            if (e.name === 'AbortError') return; // 使用者取消儲存
+            console.warn('[doExportSRT] showSaveFilePicker 失敗:', e.name, e.message);
+            _doFallbackDownload(fname, content, ext); // 降級至 blob 下載
         });
-        if (!blocks.length) { toast('沒有可匯出的字幕段落', 'err'); return; }
-        const srtContent = blocks.join('\r\n') + '\r\n';
-        await saveSubtitleFile(baseName + '.srt', srtContent, '.srt');
-        toast('SRT 已匯出 ✓', 'ok');
+        return;
+    }
+
+    // ── 降級：blob 下載 + macOS 備援 Modal
+    _doFallbackDownload(fname, content, ext);
+    toast(successMsg, 'ok');
+}
+
+// ── Blob 降級下載（Chrome/Firefox 可直接用；Mac 同時顯示備援 Modal）
+function _doFallbackDownload(fname, content, ext) {
+    try {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = fname; a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+    } catch(err) {
+        console.warn('[_doFallbackDownload] blob 下載失敗:', err);
+    }
+    // macOS 使用者：顯示備援預覽 Modal（複製內容 / .txt 下載 / xattr 指令）
+    const isMac = /Mac/i.test(navigator.platform || navigator.userAgent || '');
+    if (isMac) {
+        _srtPreviewData = { fname, content, ext };
+        showSRTPreviewModal(fname, content);
     }
 }
 
@@ -5959,48 +6023,6 @@ function buildASSContent(lines) {
 
 // 暫存供 srtPreviewModal 使用
 let _srtPreviewData = { fname: '', content: '', ext: '' };
-
-async function saveSubtitleFile(fname, content, ext) {
-    // ── 優先：File System Access API（macOS 不觸發 quarantine 警告）──
-    if (window.showSaveFilePicker) {
-        try {
-            const extLabel = ext === '.srt' ? 'SubRip Subtitle' : 'Advanced SubStation Alpha';
-            const handle = await window.showSaveFilePicker({
-                suggestedName: fname,
-                types: [{ description: `${extLabel} (*${ext})`, accept: { 'text/plain': [ext] } }]
-            });
-            const writable = await handle.createWritable();
-            const enc = new TextEncoder();
-            await writable.write(enc.encode(content)); // 無 BOM UTF-8
-            await writable.close();
-            return; // 成功，無 quarantine
-        } catch(e) {
-            if (e.name === 'AbortError') return; // 使用者取消
-            console.warn('[saveSubtitleFile] showSaveFilePicker 失敗:', e.name, e.message);
-        }
-    }
-
-    // ── 降級：先嘗試 blob 下載，同時顯示預覽 Modal（macOS 完整備援）──
-    _srtPreviewData = { fname, content, ext };
-    const isMac = /Mac/i.test(navigator.platform || navigator.userAgent || '');
-
-    // 嘗試 blob 下載（Chrome/Firefox 可能成功，Safari 可能被 quarantine 阻擋）
-    try {
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href = url; a.download = fname; a.style.display = 'none';
-        document.body.appendChild(a); a.click();
-        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
-    } catch(err) {
-        console.warn('[saveSubtitleFile] blob 下載失敗:', err);
-    }
-
-    // macOS 使用者：主動顯示預覽 Modal（提供複製 + xattr 指令）
-    if (isMac) {
-        showSRTPreviewModal(fname, content);
-    }
-}
 function exportTXT() {
     const fname = safeFilename(currentProjectName) + '.txt';
     const content = document.getElementById('transcriptBox').innerText;
