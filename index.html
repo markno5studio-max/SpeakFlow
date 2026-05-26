@@ -139,8 +139,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .gb:hover{border-color:rgba(var(--primary-rgb),.4);}
 .gb.active{background:var(--primary);border-color:var(--primary-dark);}
 .tr-area{display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;}
-.tr-card{flex:2;min-width:260px;}
-.ch-card{flex:1;min-width:190px;display:none;}
+.tr-card{flex:1;min-width:260px;}
+.ch-card{flex:none;width:282px;display:none;min-width:0;}
 .tr-box{background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;min-height:240px;font-size:13.5px;white-space:pre-wrap;outline:none;transition:var(--t);line-height:1.9;}
 .tr-box:focus{border-color:var(--border-focus);}
 mark.fh{background:rgba(var(--primary-rgb),.22);color:var(--text-primary);padding:0 3px;border-radius:3px;font-weight:800;border-bottom:2px solid var(--primary);}
@@ -293,7 +293,13 @@ input[type="color"]{-webkit-appearance:none;cursor:pointer;}
 input[type="color"]::-webkit-color-swatch-wrapper{padding:0;}
 input[type="color"]::-webkit-color-swatch{border:none;border-radius:3px;}
 input[type="range"]{width:100%;accent-color:var(--primary);}
-textarea.fi{resize:vertical;}
+textarea.fi{resize:none;} /* 預設不可拖曳調整；管理員模式下開放 */
+/* ── 管理員模式：開放 textarea 調整大小與面板拖曳手柄 ── */
+body.admin-mode textarea.fi{resize:vertical;}
+body.admin-mode .ed-resizer{display:block;}
+body.admin-mode .tr-resizer{display:block;}
+/* 預設隱藏拖曳調整手柄（非管理員不可調整面板尺寸）*/
+.ed-resizer,.tr-resizer{display:none;}
 
 /* ─── SIDEBAR OTHER ACCOUNTS ─── */
 .sb-alt-row{display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;transition:var(--t);opacity:.6;border-top:1px solid rgba(255,255,255,.03);}
@@ -884,6 +890,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <button class="btn" onclick="translateTranscript('zh','en')" title="將逐字稿全文翻譯為英文（需 Gemini API）"><i class="fas fa-earth-americas"></i> 中→英</button>
                         <button class="btn" onclick="translateTranscript('en','zh-TW')" title="將逐字稿全文翻譯為繁體中文（需 Gemini API）"><i class="fas fa-earth-asia"></i> 英→中</button>
                         <button class="btn" onclick="reapplyHighlights()"><i class="fas fa-highlighter"></i> 套用標記</button>
+                        <button class="btn" id="showChaptersBtn" onclick="toggleChapterPanel()" style="display:none;" title="展開章節面板"><i class="fas fa-list-check"></i> 章節</button>
                         <!-- 逐字稿文字大小 -->
                         <div style="display:flex;align-items:center;gap:2px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px 4px;">
                             <button onclick="adjustTranscriptFontSize(-2)" title="縮小文字" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:2px 5px;font-size:12px;font-weight:700;line-height:1;">A-</button>
@@ -927,7 +934,8 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <i class="fas fa-chevron-up" id="chCollapseIcon"></i>
                     </button>
                     <div class="c-ttl"><i class="fas fa-list-check"></i> 章節</div>
-                    <button class="btn" onclick="copyChapters()" style="padding:4px 9px;font-size:11px;"><i class="fas fa-copy"></i></button>
+                    <button class="btn" onclick="copyChapters()" style="padding:4px 9px;font-size:11px;" title="複製章節"><i class="fas fa-copy"></i></button>
+                    <button class="btn" onclick="toggleChapterPanel()" style="padding:4px 9px;font-size:11px;margin-left:2px;" title="隱藏章節面板"><i class="fas fa-xmark"></i></button>
                 </div>
                 <div class="ch-list" id="chapterList"></div>
             </div>
@@ -940,7 +948,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
         <div class="card">
             <div class="c-ttl" style="margin-bottom:12px;"><i class="fas fa-plus-circle"></i> 新增關鍵字</div>
             <textarea id="keywordInput" rows="4" placeholder="用逗號或換行分隔，例如：專案進度, 預算, 特效, 畫面修改..."
-                style="width:100%;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-primary);font-size:13px;font-family:inherit;resize:vertical;outline:none;margin-bottom:12px;line-height:1.6;"></textarea>
+                class="fi" style="width:100%;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;margin-bottom:12px;line-height:1.6;"></textarea>
             <div style="display:flex;gap:8px;align-items:center;">
                 <button class="btn btn-p" id="saveKwBtn" type="button" onclick="saveKeywords()" style="cursor:pointer;"><i class="fas fa-floppy-disk"></i> 儲存詞庫</button>
                 <button class="btn" id="clearKwBtn" type="button" onclick="clearKeywords()" style="cursor:pointer;"><i class="fas fa-trash"></i> 清除全部</button>
@@ -1011,9 +1019,9 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     <button class="btn" onclick="addAutoDeletePreset('其實')" style="padding:3px 9px;font-size:11.5px;">其實</button>
                 </div>
             </div>
-            <textarea id="autoDelInput" rows="5"
+            <textarea id="autoDelInput" rows="5" class="fi"
                 placeholder="每行一詞，或用逗號 / 頓號分隔，例如：&#10;那個&#10;就是&#10;然後&#10;嗯&#10;對對對"
-                style="width:100%;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-primary);font-size:13px;font-family:inherit;resize:vertical;outline:none;margin-bottom:12px;line-height:1.8;"></textarea>
+                style="width:100%;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;margin-bottom:12px;line-height:1.8;"></textarea>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                 <button class="btn btn-p" onclick="saveAutoDelete()" style="cursor:pointer;"><i class="fas fa-floppy-disk"></i> 儲存並套用</button>
                 <button class="btn" onclick="clearAutoDelete()" style="cursor:pointer;"><i class="fas fa-trash"></i> 清除全部</button>
@@ -1027,6 +1035,34 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
 
 </div>
 </main>
+</div>
+
+<!-- ═══ SRT 內容預覽（macOS 無法直接開啟時的備用方案）═══ -->
+<div class="overlay" id="srtPreviewModal">
+    <div class="mbox lg">
+        <div class="m-hd">
+            <div class="m-ttl"><i class="fas fa-code" style="color:var(--primary);margin-right:7px;"></i>字幕內容 <span id="srtPreviewFname" style="font-size:12px;font-weight:400;color:var(--text-tertiary);margin-left:8px;"></span></div>
+            <button class="m-close" onclick="closeModal('srtPreviewModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <p style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.7;">
+            <i class="fas fa-triangle-exclamation" style="color:var(--primary);margin-right:4px;"></i>
+            macOS 安全政策封鎖直接開啟字幕檔。請使用以下任一方式取得檔案：
+        </p>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <button class="btn btn-p" onclick="copySRTPreviewContent()" style="font-size:12px;"><i class="fas fa-copy"></i> 複製全部內容</button>
+            <button class="btn" onclick="downloadSRTasTxt()" style="font-size:12px;" title="下載為 .txt，TextEdit 可直接開啟，再另存為 .srt"><i class="fas fa-file-lines"></i> 下載為 .txt（可直接開啟）</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px;">
+            ① 複製全部 → 開啟「文字編輯」→ 貼上 → 儲存 → 副檔名改 <code>.srt</code><br>
+            ② 或下載 .txt → 開啟 → 另存新檔 → 將副檔名改為 <code>.srt</code><br>
+            ③ 在「終端機」貼上以下指令移除隔離屬性，即可正常開啟已下載的 .srt：
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+            <code id="xattrCmd" style="flex:1;font-size:11px;background:var(--bg-surface);padding:6px 10px;border-radius:6px;border:1px solid var(--border);color:var(--text-secondary);word-break:break-all;"></code>
+            <button class="btn" onclick="copyXattrCmd()" style="padding:5px 10px;font-size:11px;white-space:nowrap;flex-shrink:0;"><i class="fas fa-copy"></i> 複製指令</button>
+        </div>
+        <textarea id="srtPreviewContent" readonly style="width:100%;height:220px;font-family:'SF Mono',Consolas,monospace;font-size:11px;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-secondary);padding:10px 12px;resize:none;outline:none;line-height:1.6;"></textarea>
+    </div>
 </div>
 
 <!-- ═══ SRT 格式選擇 MODAL ═══ -->
@@ -1433,12 +1469,12 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <hr class="divider">
                 <div class="s-sec">
                     <div class="s-lbl">已核准名單 <span style="font-size:10px;font-weight:400;color:var(--text-tertiary);">（每行一個 Email，儲存後立即生效）</span></div>
-                    <textarea class="fi" id="sApprovedEmails" rows="5" placeholder="user1@gmail.com&#10;user2@gmail.com" style="resize:vertical;font-family:monospace;font-size:12px;"></textarea>
+                    <textarea class="fi" id="sApprovedEmails" rows="5" placeholder="user1@gmail.com&#10;user2@gmail.com" style="font-family:monospace;font-size:12px;"></textarea>
                 </div>
                 <hr class="divider">
                 <div class="s-sec">
                     <div class="s-lbl">封鎖名單 <span style="font-size:10px;font-weight:400;color:var(--text-tertiary);">（每行一個 Email，列入後永久拒絕登入）</span></div>
-                    <textarea class="fi" id="sBlockedEmails" rows="3" placeholder="blocked@example.com&#10;spam@example.com" style="resize:vertical;font-family:monospace;font-size:12px;"></textarea>
+                    <textarea class="fi" id="sBlockedEmails" rows="3" placeholder="blocked@example.com&#10;spam@example.com" style="font-family:monospace;font-size:12px;"></textarea>
                     <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">封鎖優先於核准名單，被封鎖的帳號即使申請邀請碼也無法登入。</p>
                 </div>
                 <hr class="divider">
@@ -3364,7 +3400,11 @@ function renderResults() {
     const m=Math.floor(audioDuration/60),s=Math.floor(audioDuration%60);
     document.getElementById('statDuration').textContent=`${p2(m)}:${p2(s)}`;
     const hasCh=parsedResult.chapters?.length>0;
-    document.getElementById('chaptersContainer').style.display=hasCh?'flex':'none';
+    // 若用戶已手動隱藏章節面板，不強制顯示
+    document.getElementById('chaptersContainer').style.display = (hasCh && !_chPanelHidden) ? 'flex' : 'none';
+    // 更新「顯示章節」按鈕
+    const showChBtn = document.getElementById('showChaptersBtn');
+    if (showChBtn) showChBtn.style.display = (hasCh && _chPanelHidden) ? '' : 'none';
     // 有章節時確保列表展開，重置收合圖示
     if(hasCh){
         const cl=document.getElementById('chapterList');
@@ -4501,6 +4541,11 @@ function updateUserUI() {
     updateAdminProjTab();
     renderSidebarOtherAccounts(); // 更新其他帳號列表
     updateAdminBtn();             // 更新管理員按鈕狀態
+    updateAdminModeClass();       // 更新管理員模式 CSS class（控制調整大小權限）
+}
+
+function updateAdminModeClass() {
+    document.body.classList.toggle('admin-mode', isAdminSessionValid());
 }
 
 // ── 更新管理員按鈕外觀（登入/在線）──
@@ -5465,6 +5510,25 @@ function toggleChapterList() {
     }
 }
 
+// ── 整個章節面板的顯示 / 隱藏 ──
+let _chPanelHidden = false; // 用戶手動隱藏章節面板
+
+function toggleChapterPanel() {
+    _chPanelHidden = !_chPanelHidden;
+    const panel = document.getElementById('chaptersContainer');
+    const showBtn = document.getElementById('showChaptersBtn');
+    if (!panel) return;
+    if (_chPanelHidden) {
+        panel.style.display = 'none';
+        if (showBtn) showBtn.style.display = '';
+    } else {
+        // 只有在有章節內容時才顯示面板
+        const hasCh = parsedResult?.chapters?.length > 0;
+        panel.style.display = hasCh ? 'flex' : 'none';
+        if (showBtn) showBtn.style.display = (!hasCh) ? '' : 'none';
+    }
+}
+
 // ══════════════════════════════════════════
 // 逐字稿標題同步
 // ══════════════════════════════════════════
@@ -5893,6 +5957,9 @@ function buildASSContent(lines) {
     return hdr + events + '\n';
 }
 
+// 暫存供 srtPreviewModal 使用
+let _srtPreviewData = { fname: '', content: '', ext: '' };
+
 async function saveSubtitleFile(fname, content, ext) {
     // ── 優先：File System Access API（macOS 不觸發 quarantine 警告）──
     if (window.showSaveFilePicker) {
@@ -5903,31 +5970,35 @@ async function saveSubtitleFile(fname, content, ext) {
                 types: [{ description: `${extLabel} (*${ext})`, accept: { 'text/plain': [ext] } }]
             });
             const writable = await handle.createWritable();
-            // 無 BOM UTF-8（FCP 不接受 BOM）
             const enc = new TextEncoder();
-            await writable.write(enc.encode(content));
+            await writable.write(enc.encode(content)); // 無 BOM UTF-8
             await writable.close();
-            return;
+            return; // 成功，無 quarantine
         } catch(e) {
             if (e.name === 'AbortError') return; // 使用者取消
-            console.warn('[saveSubtitleFile] showSaveFilePicker 失敗，降級至 blob 下載:', e.name, e.message);
+            console.warn('[saveSubtitleFile] showSaveFilePicker 失敗:', e.name, e.message);
         }
     }
 
-    // ── 降級：blob 下載（Safari / Firefox / 舊版）──
-    // macOS 可能將下載檔案標記 quarantine，導致無法直接開啟
-    // 解決方式：在 Finder 按住 Control 點擊檔案 → 選擇「打開」，或：
-    // 在「終端機」執行：xattr -d com.apple.quarantine ~/Downloads/<檔案名稱>
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = fname; a.style.display = 'none';
-    document.body.appendChild(a); a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
-    // 若為 Mac，提示 quarantine 解法
-    const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
+    // ── 降級：先嘗試 blob 下載，同時顯示預覽 Modal（macOS 完整備援）──
+    _srtPreviewData = { fname, content, ext };
+    const isMac = /Mac/i.test(navigator.platform || navigator.userAgent || '');
+
+    // 嘗試 blob 下載（Chrome/Firefox 可能成功，Safari 可能被 quarantine 阻擋）
+    try {
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = fname; a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+    } catch(err) {
+        console.warn('[saveSubtitleFile] blob 下載失敗:', err);
+    }
+
+    // macOS 使用者：主動顯示預覽 Modal（提供複製 + xattr 指令）
     if (isMac) {
-        setTimeout(() => toast('若 Mac 顯示無法開啟，請按住 Control 點擊檔案 → 打開', 'ok'), 500);
+        showSRTPreviewModal(fname, content);
     }
 }
 function exportTXT() {
@@ -5942,6 +6013,48 @@ function exportTXT() {
 }
 function copyChapters(){ navigator.clipboard.writeText(document.getElementById('chapterList').innerText).then(()=>toast('章節已複製','ok')); }
 function dl(name,content,type){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([content],{type})); a.download=name; a.click(); }
+
+// ── SRT 預覽 Modal 相關函數 ──────────────────────────────────────────
+function showSRTPreviewModal(fname, content) {
+    document.getElementById('srtPreviewFname').textContent = fname;
+    document.getElementById('srtPreviewContent').value = content;
+    // 設定 xattr 指令（使用者需在 Terminal 執行）
+    const cmdEl = document.getElementById('xattrCmd');
+    if (cmdEl) cmdEl.textContent = `xattr -d com.apple.quarantine ~/Downloads/${fname}`;
+    document.getElementById('srtPreviewModal').classList.add('show');
+}
+
+function copySRTPreviewContent() {
+    const ta = document.getElementById('srtPreviewContent');
+    if (!ta) return;
+    navigator.clipboard.writeText(ta.value).then(() => {
+        toast('字幕內容已複製到剪貼簿 ✓', 'ok');
+    }).catch(() => {
+        ta.select();
+        document.execCommand('copy');
+        toast('已選取，請按 ⌘C 複製', 'ok');
+    });
+}
+
+function copyXattrCmd() {
+    const cmd = document.getElementById('xattrCmd')?.textContent || '';
+    navigator.clipboard.writeText(cmd).then(() => {
+        toast('指令已複製，請貼至「終端機」執行', 'ok');
+    }).catch(() => toast('複製失敗，請手動選取指令', 'err'));
+}
+
+function downloadSRTasTxt() {
+    const { fname, content } = _srtPreviewData;
+    if (!content) { toast('無內容可下載', 'err'); return; }
+    const txtFname = fname.replace(/\.[^.]+$/, '') + '.txt'; // 改為 .txt 副檔名
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = txtFname; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+    toast(`已下載 ${txtFname}（以文字編輯開啟後，另存為 .srt）`, 'ok');
+}
 
 // ══════════════════════════════════════════
 // 關鍵字詞庫
