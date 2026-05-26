@@ -680,7 +680,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <label class="tog"><input type="checkbox" id="enableFatHighlight" checked><span class="td"></span>FatHighlight 標記</label>
                 <label class="tog" title="AI 依語境自動修正同音字為正確的專有名詞、人名（Gemini 模型）"><input type="checkbox" id="enableContextualCorrection"><span class="td"></span>情境修正</label>
                 <label class="tog" title="轉錄完成後自動翻譯為另一種語言，雙語對照顯示"><input type="checkbox" id="enableBilingual" onchange="onBilingualToggle()"><span class="td"></span>雙語翻譯</label>
-                <label class="tog" title="匯出 SRT 時，每段字幕結尾自動延伸至下一段起始，消除空白間隙（適合剪輯軟體連續字幕）"><input type="checkbox" id="enableEndExtend"><span class="td"></span>延伸字幕</label>
+                <label class="tog" title="匯出 SRT 時，只在有空隙處才延伸字幕結尾至下一段起始（已精準對齊的句子不受影響，不縮短）"><input type="checkbox" id="enableEndExtend"><span class="td"></span>延伸字幕</label>
             </div>
             <!-- 雙語翻譯目標語言選擇 -->
             <div id="bilingualSection" style="display:none;margin-top:8px;">
@@ -1165,7 +1165,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     <div class="s-lbl">字幕預設行為</div>
                     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
                         <input type="checkbox" id="sEndExtend" style="width:16px;height:16px;cursor:pointer;">
-                        <span>預設啟用「延伸字幕」（每段字幕結尾延伸至下一段起始，消除空白間隙）</span>
+                        <span>預設啟用「延伸字幕」（有空隙時才延伸結尾至下一段起始，不縮短精準對齊的句子）</span>
                     </label>
                     <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">此為全站預設值，使用者可在個人偏好設定中個別覆蓋。</p>
                 </div>
@@ -1542,7 +1542,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     <div class="s-lbl">字幕匯出行為</div>
                     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
                         <input type="checkbox" id="sPrefsEndExtend" style="width:16px;height:16px;cursor:pointer;">
-                        <span>啟用「延伸字幕」（每段字幕結尾延伸至下一段起始，消除空白間隙）</span>
+                        <span>啟用「延伸字幕」（有空隙時才延伸結尾至下一段起始，不縮短精準對齊的句子）</span>
                     </label>
                     <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">適合剪輯軟體連續字幕，FCP / Premiere / Resolve 匯入後字幕之間無黑畫面。</p>
                 </div>
@@ -2326,11 +2326,11 @@ async function stopMicAndTranscribe() {
 
     try {
         const result = await transcriber(merged, {
-            chunk_length_s: 30,
-            stride_length_s: 6,
+            chunk_length_s: 20,          // 較短片段 → 時間碼更貼近語音邊界
+            stride_length_s: 4,
             language: whisperLang,
             task: 'transcribe',
-            return_timestamps: true,
+            return_timestamps: 'word',   // word-level：每個詞有獨立起止時間，精準對齊音軌
             num_beams: 1,
             temperature: 0,
             condition_on_prev_tokens: true,
@@ -2536,21 +2536,46 @@ function whisperToResult(out, maxCh) {
         if(!fullText) return { transcript:[], chapters:[] };
         return { transcript: splitTextToSegs(fullText, maxC, audioDuration), chapters:[] };
     }
+
+    // ① 過濾空白詞，並修補 null 結束時間戳
+    //    word-level 模式下，部分詞的 ts[1] 可能為 null（模型無法確定邊界）
+    //    → 用下一個詞的起始時間填補，確保每個詞都有完整時間區間
+    const chunks = out.chunks.filter(c => (c.text||'').trim());
+    for (let i = 0; i < chunks.length - 1; i++) {
+        const ts  = chunks[i].timestamp || [];
+        const tsN = chunks[i+1].timestamp || [];
+        if ((ts[1] ?? null) === null && (tsN[0] ?? null) !== null) {
+            chunks[i] = { ...chunks[i], timestamp: [ts[0], tsN[0]] };
+        }
+    }
+    // 最後一個詞：end 為 null → 用音訊總長或 start+估算補足
+    if (chunks.length > 0) {
+        const last = chunks[chunks.length - 1];
+        const lts  = last.timestamp || [];
+        if ((lts[1] ?? null) === null) {
+            const fallback = audioDuration > 0 ? audioDuration : (lts[0] ?? 0) + 3;
+            chunks[chunks.length - 1] = { ...last, timestamp: [lts[0], fallback] };
+        }
+    }
+
+    // ② 將詞累積成段落（依 maxChars 斷行，精準紀錄段落起止時間）
     const lines=[];
-    let cur='', cStart=out.chunks[0]?.timestamp[0]??0, cEnd=0;
-    for(const chunk of out.chunks){
+    let cur='', cStart = chunks[0]?.timestamp[0] ?? 0, cEnd = 0;
+    for(const chunk of chunks){
         const t=(chunk.text||'').trim();
         if(!t) continue;
-        const ts=chunk.timestamp||[cEnd,cEnd];
-        const tsStart=ts[0]??cEnd, tsEnd=ts[1]??ts[0]??cEnd;
+        const ts=chunk.timestamp||[cEnd, cEnd];
+        const tsStart = ts[0] ?? cEnd;
+        const tsEnd   = ts[1] ?? tsStart; // 已修補過，一般不會為 null
         if(cur && (cur+t).replace(/\s/g,'').length > maxC){
             lines.push({ start:s2srt(cStart), end:s2srt(cEnd), speaker:'', text:cur.trim() });
             cur=t; cStart=tsStart;
         } else { cur+=t; }
-        cEnd=tsEnd;
+        cEnd=tsEnd; // 持續更新為最新詞的結束時間
     }
     if(cur.trim()) lines.push({ start:s2srt(cStart), end:s2srt(cEnd), speaker:'', text:cur.trim() });
-    // 若所有段落時間碼都是 00:00:00,000（timestamps 全為 null），改用估算
+
+    // ③ 若所有時間碼都是零（timestamps 全為 null），改為均勻估算
     const allZero=lines.every(l=>l.start==='00:00:00,000'&&l.end==='00:00:00,000');
     if(allZero && lines.length>0){
         const segDur=audioDuration>0?audioDuration/lines.length:3;
@@ -2758,11 +2783,11 @@ async function runLocalTranscription(lt) {
     const isFastModel = (key === 'tiny' || key === 'base');
     lt.textContent = `Whisper 本地辨識中（語言：${LANG_DISPLAY[langCode]}，依音訊長度可能需數分鐘）...`;
     const opts = {
-        chunk_length_s: 30,
-        stride_length_s: isFastModel ? 5 : 6,
+        chunk_length_s: isFastModel ? 20 : 25,  // 較短片段 → 時間碼貼近語音邊界
+        stride_length_s: isFastModel ? 4 : 5,
         language: whisperLang,
         task: 'transcribe',
-        return_timestamps: true,
+        return_timestamps: 'word',   // word-level：每個詞有獨立起止時間，精準對齊音軌
         num_beams: isFastModel ? 1 : 2,     // 大模型用 beam=2 提升精準度
         temperature: 0,
         condition_on_prev_tokens: true,      // 前文連貫性
@@ -6029,18 +6054,24 @@ async function exportSRT() {
     const MIN_DUR = 0.1;
     lines.forEach(l => { if (l.end <= l.start) l.end = l.start + MIN_DUR; });
 
-    // ── Step 3.5：延伸字幕模式（消除空白間隙）──
+    // ── Step 3.5：延伸字幕模式（只填補間隙，絕不縮短已精準對齊的句子）──
+    // 正確行為：若 lines[i].end < lines[i+1].start（有空隙），才把結尾延伸至下一段起始
+    // 錯誤行為（已修正）：lines[i].end = lines[i+1].start（無條件覆蓋，重疊時反而縮短句子）
     const doExtend = document.getElementById('enableEndExtend')?.checked;
     if (doExtend) {
         for (let i = 0; i < lines.length - 1; i++) {
-            lines[i].end = lines[i + 1].start; // 結尾延伸至下一段起始
+            if (lines[i].end < lines[i + 1].start) {
+                // 有間隙 → 延伸結尾至下一段起始（貼合音軌無空白）
+                lines[i].end = lines[i + 1].start;
+            }
+            // 已重疊 → 保留原始時間，由 Step 4 防重疊處理，不在此縮短
         }
     }
 
-    // ── Step 4：防重疊保護（延伸模式下不需要，但保留以防邊界情況）
+    // ── Step 4：防重疊保護（延伸模式有間隙填滿後不觸發；處理真正的重疊情況）
     for (let i = 0; i < lines.length - 1; i++) {
         if (lines[i].end > lines[i + 1].start) {
-            lines[i].end = Math.max(lines[i].start + MIN_DUR, lines[i + 1].start - (doExtend ? 0 : 0.05));
+            lines[i].end = Math.max(lines[i].start + MIN_DUR, lines[i + 1].start - 0.04);
         }
     }
 
