@@ -804,10 +804,6 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <option value="1.5">1.5×</option>
                         <option value="2">2×</option>
                     </select>
-                    <!-- 章節面板切換按鈕（放在播放列，始終可見）-->
-                    <button class="play-btn" id="chPanelToggleBtn" onclick="toggleChapterPanel()" title="顯示/隱藏章節面板" style="font-size:12px;padding:4px 8px;gap:4px;display:flex;align-items:center;">
-                        <i class="fas fa-list-check"></i>
-                    </button>
                     <!-- 更換音訊按鈕（載入音訊後顯示） -->
                     <button id="changeAudioBtn" onclick="document.getElementById('changeAudioInput').click()" title="更換為另一個音訊/影片檔案，不影響逐字稿"
                         style="display:none;padding:3px 9px;background:rgba(212,162,84,.1);border:1px solid rgba(212,162,84,.3);border-radius:6px;color:var(--primary);font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap;display:none;align-items:center;gap:4px;">
@@ -885,6 +881,11 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <option value="30">30fps</option>
                         <option value="60">60fps</option>
                     </select>
+                    <!-- 章節面板切換（固定於逐字稿標題列，幀率選單右側）-->
+                    <button id="chPanelToggleBtn" onclick="toggleChapterPanel()" title="顯示/隱藏章節面板"
+                        style="flex-shrink:0;padding:2px 7px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--text-secondary);cursor:pointer;font-size:11px;font-family:inherit;display:flex;align-items:center;gap:4px;transition:var(--t);">
+                        <i class="fas fa-list-check"></i>
+                    </button>
                 </div>
                 <div class="c-hd" style="margin-bottom:10px;padding-top:0;border-top:none;">
                     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
@@ -2867,7 +2868,9 @@ async function runGeminiTranscription(model, lt) {
 輸出格式範例：
 {"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容文字"}],"chapters":[]}`;
 
-    // Gemini 2.5 支援 thinkingConfig；啟用自動思考（thinkingBudget:-1）以最大化辨識準確度
+    // Gemini 2.5 支援 thinkingConfig
+    // 音訊轉錄為感知任務（非推理），停用思考（thinkingBudget:0）確保最快速度與穩定性
+    // 注意：-1 / undefined 均為無效值，會導致 API 拒絕請求
     const isThinkingModel = model.includes('2.5');
     const payload = {
         contents: [{ parts: [{ text: prompt }, audioPart] }],
@@ -2876,7 +2879,7 @@ async function runGeminiTranscription(model, lt) {
             maxOutputTokens: 65536,
             responseMimeType: 'application/json',
             ...(isThinkingModel && {
-                thinkingConfig: { thinkingBudget: -1 } // -1 = 自動思考，最高辨識精度
+                thinkingConfig: { thinkingBudget: 0 } // 0 = 停用思考；音訊轉錄不需推理，速度最快
             })
         }
     };
@@ -2886,7 +2889,8 @@ async function runGeminiTranscription(model, lt) {
     // ── 嘗試串流 API，失敗時自動降級至標準 API ──
     let rawText = '';
     try {
-        const sseResp = await fetch(
+        // 503/過載時先等 10 秒重試一次，避免不必要地降級至非串流
+        let sseResp = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
             { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
         );
@@ -2895,7 +2899,18 @@ async function runGeminiTranscription(model, lt) {
             const c = eb?.error?.code || sseResp.status;
             if (c === 429) { const e = new Error(gemini429Msg(model)); e._is429 = true; throw e; }
             if (c === 403) throw new Error('API 金鑰無效或無存取權限（403）。請至後台設定確認 Gemini API 金鑰。');
-            throw new Error(eb?.error?.message || `HTTP ${sseResp.status}`);
+            if (c === 503 || c === 500 || (eb?.error?.message || '').toLowerCase().includes('overload')) {
+                lt.textContent = '伺服器繁忙，10 秒後重試串流...';
+                await sleep(10000);
+                sseResp = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+                    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+                );
+            }
+            if (!sseResp.ok) {
+                const eb2 = await sseResp.json().catch(() => ({}));
+                throw new Error(eb2?.error?.message || `HTTP ${sseResp.status}`);
+            }
         }
         const reader = sseResp.body.getReader();
         const dec = new TextDecoder();
@@ -2928,19 +2943,34 @@ async function runGeminiTranscription(model, lt) {
             }
         }
     } catch(streamErr) {
-        // 串流失敗 → 降級至標準（非串流）API
+        // 串流失敗 → 降級至標準（非串流）API，同時自動重試一次 503 伺服器過載
         if (streamErr._is429 || streamErr.message?.includes('403')) throw streamErr;
-        lt.textContent = `串流失敗，改用標準 API 重試（${streamErr.message?.slice(0,40) || ''}）...`;
-        const stdResp = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
-        );
-        if (!stdResp.ok) {
+        const shortMsg = (streamErr.message || '').slice(0, 60);
+        lt.textContent = `串流失敗，改用標準 API 重試…`;
+
+        let stdResp;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (attempt > 0) {
+                lt.textContent = `伺服器暫時繁忙，15 秒後自動重試...`;
+                await sleep(15000);
+                lt.textContent = `重試中（標準 API）...`;
+            }
+            stdResp = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }
+            );
+            if (stdResp.ok) break;
             const eb = await stdResp.json().catch(() => ({}));
             const c = eb?.error?.code || stdResp.status;
             if (c === 429) { const e = new Error(gemini429Msg(model)); e._is429 = true; throw e; }
             if (c === 403) throw new Error('API 金鑰無效（403）。請至後台設定確認 Gemini API 金鑰。');
-            throw new Error(eb?.error?.message || `HTTP ${stdResp.status}`);
+            // 503 / 服務過載 → 重試一次，其他錯誤直接拋出
+            if (attempt < 1 && (c === 503 || c === 500 || (eb?.error?.message || '').toLowerCase().includes('overload'))) continue;
+            throw new Error(eb?.error?.message || `HTTP ${stdResp.status}：${shortMsg}`);
+        }
+        if (!stdResp.ok) {
+            const eb2 = await stdResp.json().catch(() => ({}));
+            throw new Error(eb2?.error?.message || `API 請求失敗 HTTP ${stdResp.status}`);
         }
         const stdData = await stdResp.json();
         rawText = stdData.candidates?.[0]?.content?.parts?.[0]?.text || '';
