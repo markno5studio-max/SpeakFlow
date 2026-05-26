@@ -2839,7 +2839,18 @@ async function runGeminiTranscription(model, lt) {
 
     // ── 決定傳輸路徑：小型檔案 inline base64 / 大型檔案 Files API ──
     let audioPart;
-    const mimeType = currentFile.type || 'audio/mpeg';
+    // 正規化 MIME type：部分瀏覽器回傳非標準類型，Gemini API 不接受
+    const rawMime = currentFile.type || '';
+    const mimeType = (() => {
+        const m = rawMime.toLowerCase();
+        if (m.includes('mp4') || m === 'audio/x-m4a' || m === 'audio/m4a' || currentFile.name?.toLowerCase().endsWith('.m4a')) return 'audio/mp4';
+        if (m === 'audio/x-wav' || m === 'audio/vnd.wave') return 'audio/wav';
+        if (m === 'audio/x-flac') return 'audio/flac';
+        if (m === 'audio/x-aac') return 'audio/aac';
+        if (m === 'audio/x-ogg' || m === 'audio/x-vorbis+ogg') return 'audio/ogg';
+        if (m.startsWith('video/')) return 'video/mp4'; // Gemini 可處理 mp4 影像
+        return m || 'audio/mpeg';
+    })();
     if (currentFile.size > GEMINI_INLINE_LIMIT) {
         // 大型檔案（> 19MB）→ Files API multipart 上傳（無 WAV 轉換，最快）
         const { fileUri, mimeType: fm } = await uploadToGeminiFiles(currentFile, apiKey, lt);
@@ -2894,19 +2905,56 @@ async function runGeminiTranscription(model, lt) {
 輸出格式範例：
 {"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容文字"}],"chapters":[]}`;
 
-    // Gemini 2.5 支援 thinkingConfig
-    // 音訊轉錄為感知任務（非推理），停用思考（thinkingBudget:0）確保最快速度與穩定性
-    // 注意：-1 / undefined 均為無效值，會導致 API 拒絕請求
+    // ── responseSchema：強制 Gemini API 在基礎設施層驗證 JSON 結構，從根本消除格式錯誤 ──
+    // 有了 Schema 後即使輸出被截斷，API 也會儘量補足結構，大幅提升解析成功率
+    const responseSchema = {
+        type: 'OBJECT',
+        properties: {
+            transcript: {
+                type: 'ARRAY',
+                items: {
+                    type: 'OBJECT',
+                    properties: {
+                        start:   { type: 'STRING' },
+                        end:     { type: 'STRING' },
+                        speaker: { type: 'STRING' },
+                        text:    { type: 'STRING' }
+                    },
+                    required: ['start', 'end', 'speaker', 'text']
+                }
+            },
+            chapters: {
+                type: 'ARRAY',
+                items: {
+                    type: 'OBJECT',
+                    properties: {
+                        time:  { type: 'STRING' },
+                        title: { type: 'STRING' }
+                    },
+                    required: ['time', 'title']
+                }
+            }
+        },
+        required: ['transcript', 'chapters']
+    };
+
+    // thinkingBudget：
+    //   thinkingBudget:0 + responseMimeType:'application/json' 在 Gemini 2.5 Flash 已知會回傳
+    //   空 JSON 或格式異常。改為不設定 thinkingConfig（讓模型自行決定），比強制 0 可靠。
+    //   Pro 模型保留少量 thinking 提升複雜語境辨識精準度。
     const isThinkingModel = model.includes('2.5');
+    const isPro = model.includes('pro');
     const payload = {
         contents: [{ parts: [{ text: prompt }, audioPart] }],
         generationConfig: {
             temperature: 0,
             maxOutputTokens: 65536,
             responseMimeType: 'application/json',
-            ...(isThinkingModel && {
-                thinkingConfig: { thinkingBudget: 0 } // 0 = 停用思考；音訊轉錄不需推理，速度最快
+            responseSchema,                       // Schema 強制結構合法
+            ...(isThinkingModel && isPro && {
+                thinkingConfig: { thinkingBudget: 2048 } // Pro：少量思考提升複雜語境精準度
             })
+            // Flash：不設 thinkingConfig（避免 budget:0 的已知問題）
         }
     };
 
@@ -3003,13 +3051,30 @@ async function runGeminiTranscription(model, lt) {
         lt.textContent = `${modelLabel} 辨識完成，解析結果...`;
     }
 
-    if (!rawText) throw new Error('AI 未能返回有效結果。請確認：1) API 金鑰正確 2) 音訊有聲音內容 3) 嘗試選用 Flash 模型。');
-    rawText = rawText.replace(/```json[\s\S]*?```/g, m => m.slice(7,-3)).replace(/```/g, '').trim();
+    if (!rawText || !rawText.trim()) throw new Error('AI 未能返回有效結果。請確認：1) API 金鑰正確 2) 音訊有聲音內容 3) 嘗試選用 Flash 模型。');
+
+    // ── 清理回應：移除 markdown 程式碼圍欄、思考區塊、BOM ──
+    rawText = rawText
+        .replace(/^﻿/, '')                                     // UTF-8 BOM
+        .replace(/<think[\s\S]*?<\/think>/gi, '')              // 思考內容區塊
+        .replace(/```json\s*([\s\S]*?)```/gi, '$1')            // ```json … ```
+        .replace(/```\s*([\s\S]*?)```/gi, '$1')                // ``` … ```
+        .trim();
+
+    // 找到第一個 { 作為 JSON 起點（跳過任何前置說明文字）
     const jsonStart = rawText.indexOf('{');
-    if (jsonStart === -1) throw new Error(`AI 回傳格式錯誤，無法解析 JSON。原始回應前50字：${rawText.slice(0,50)}`);
-    rawText = rawText.slice(jsonStart);
+    const jsonEnd   = rawText.lastIndexOf('}');
+    if (jsonStart === -1) throw new Error(`AI 回傳格式錯誤，找不到 JSON 物件。原始回應前80字：${rawText.slice(0,80)}`);
+    // 若末尾有 } → 截取最外層 JSON 物件範圍
+    if (jsonEnd > jsonStart) rawText = rawText.slice(jsonStart, jsonEnd + 1);
+    else rawText = rawText.slice(jsonStart);
+
     // ── 嘗試解析 JSON；若被截斷則自動修復 ──
-    parsedResult = sanitizeResult(recoverJSON(rawText), langCode, maxCh);
+    const recovered = recoverJSON(rawText);
+    if (!recovered?.transcript?.length) {
+        throw new Error('AI 轉錄結果為空。請確認：1) 音訊有語音內容 2) 語言設定正確 3) 嘗試重新轉錄。');
+    }
+    parsedResult = sanitizeResult(recovered, langCode, maxCh);
 }
 
 // ══════════════════════════════════════════
@@ -3097,35 +3162,86 @@ async function runOpenAITranscription(lt) {
 
 // 解析 JSON；若截斷則嘗試多種修復策略
 function recoverJSON(raw) {
-    // 1) 直接解析
-    try { return JSON.parse(raw); } catch {}
-    // 2) 移除最後一個不完整的段落（找最後一個完整的 {...} 再補 ]}）
-    try {
-        const lastFull = raw.lastIndexOf('"}');
-        if (lastFull > 0) {
-            const cut = raw.slice(0, lastFull + 2);
-            // 找 transcript 陣列起始
-            const tIdx = cut.indexOf('"transcript"');
-            if (tIdx >= 0) {
-                return JSON.parse(cut + ']}');
-            }
+    if (!raw || !raw.trim()) throw new Error('AI 未回傳任何內容，請重試。');
+
+    // ─── 前置清理 ───────────────────────────────────────────
+    // 移除 BOM、控制字元（\x00-\x1f 除 \t\n\r）、及思考區塊 <think>…</think>
+    let s = raw
+        .replace(/^﻿/, '')
+        .replace(/<think[\s\S]*?<\/think>/gi, '')
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+        .trim();
+
+    // ─── 策略 1：直接解析 ────────────────────────────────────
+    try { return JSON.parse(s); } catch {}
+
+    // ─── 策略 2：修復未逸出的反斜線（Windows 路徑等） ──────────
+    try { return JSON.parse(s.replace(/\\(?!["\\/bfnrtu])/g, '\\\\')); } catch {}
+
+    // ─── 策略 3：尋找最後一個完整段落 + 補足陣列/物件結尾 ──────
+    // 依序嘗試各種可能的截斷情境
+    const suffixes = [
+        '"}]}',
+        '"}],"chapters":[]}',
+        '"}],"chapters":null}',
+        '],"chapters":[]}',
+        '],"chapters":null}',
+        ']}',
+        '}',
+    ];
+    // (a) 在最後一個 "} 處截斷再補尾
+    const lastObjEnd = s.lastIndexOf('"}');
+    if (lastObjEnd > 0) {
+        const cut = s.slice(0, lastObjEnd + 2);
+        for (const sfx of suffixes) {
+            try {
+                const r = JSON.parse(cut + sfx);
+                if (r?.transcript || r?.chapters) return r;
+            } catch {}
         }
-    } catch {}
-    // 3) 補足結尾
-    const suffixes = ['"}]}', '"}],"chapters":[]}', '],"chapters":[]}', ']}'];
-    for (const sfx of suffixes) {
-        try { return JSON.parse(raw + sfx); } catch {}
     }
-    // 4) 找最後完整物件邊界
+    // (b) 在原始末尾直接補尾
+    for (const sfx of suffixes) {
+        try {
+            const r = JSON.parse(s + sfx);
+            if (r?.transcript || r?.chapters) return r;
+        } catch {}
+    }
+
+    // ─── 策略 4：括號深度追蹤，找最後閉合的物件 ───────────────
     try {
-        let depth = 0, lastClose = -1;
-        for (let i = 0; i < raw.length; i++) {
-            if (raw[i] === '{') depth++;
-            else if (raw[i] === '}') { depth--; if (depth === 0) lastClose = i; }
+        let depth = 0, lastClose = -1, inStr = false, esc = false;
+        for (let i = 0; i < s.length; i++) {
+            const c = s[i];
+            if (esc) { esc = false; continue; }
+            if (c === '\\' && inStr) { esc = true; continue; }
+            if (c === '"') { inStr = !inStr; continue; }
+            if (inStr) continue;
+            if (c === '{') depth++;
+            else if (c === '}') { depth--; if (depth === 0) lastClose = i; }
         }
-        if (lastClose > 0) return JSON.parse(raw.slice(0, lastClose + 1));
+        if (lastClose > 0) {
+            const r = JSON.parse(s.slice(0, lastClose + 1));
+            if (r?.transcript || r?.chapters) return r;
+        }
     } catch {}
-    throw new Error('AI 回傳 JSON 格式錯誤或嚴重截斷，無法解析。請嘗試：① 縮短音訊 ② 選用 Flash 模型 ③ 重試。');
+
+    // ─── 策略 5（最後防線）：Regex 逐條提取 transcript 條目 ───
+    // 即使 JSON 嚴重損壞，只要能掃到 {"start":…,"end":…,"text":…} 就能救回大部分轉錄
+    try {
+        const entries = [];
+        const entryRe = /\{\s*"start"\s*:\s*"([^"]*?)"\s*,\s*"end"\s*:\s*"([^"]*?)"\s*,\s*"speaker"\s*:\s*"([^"]*?)"\s*,\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g;
+        let m;
+        while ((m = entryRe.exec(s)) !== null) {
+            entries.push({ start: m[1], end: m[2], speaker: m[3], text: m[4].replace(/\\n/g,'\n').replace(/\\"/g,'"') });
+        }
+        if (entries.length > 0) {
+            console.warn(`[recoverJSON] 策略 5 Regex 提取：救回 ${entries.length} 段`);
+            return { transcript: entries, chapters: [] };
+        }
+    } catch {}
+
+    throw new Error('AI 回傳 JSON 格式嚴重錯誤，無法解析。\n請嘗試：① 縮短音訊 ② 重新轉錄 ③ 選用 Flash 模型。\n（已自動記錄錯誤，請聯繫管理員）');
 }
 
 // 繁簡轉換對照表（簡→繁，針對語音辨識最常混入的簡體字）
