@@ -804,6 +804,10 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         <option value="1.5">1.5×</option>
                         <option value="2">2×</option>
                     </select>
+                    <!-- 章節面板切換按鈕（放在播放列，始終可見）-->
+                    <button class="play-btn" id="chPanelToggleBtn" onclick="toggleChapterPanel()" title="顯示/隱藏章節面板" style="font-size:12px;padding:4px 8px;gap:4px;display:flex;align-items:center;">
+                        <i class="fas fa-list-check"></i>
+                    </button>
                     <!-- 更換音訊按鈕（載入音訊後顯示） -->
                     <button id="changeAudioBtn" onclick="document.getElementById('changeAudioInput').click()" title="更換為另一個音訊/影片檔案，不影響逐字稿"
                         style="display:none;padding:3px 9px;background:rgba(212,162,84,.1);border:1px solid rgba(212,162,84,.3);border-radius:6px;color:var(--primary);font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap;display:none;align-items:center;gap:4px;">
@@ -821,10 +825,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
             <div class="ed-resizer" id="edResizer" title="拖曳調整寬度"></div>
             <!-- 右：字幕樣式控制 -->
             <div class="ctrl-pane" id="edRight">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;">
-                    <div class="c-ttl"><i class="fas fa-palette"></i> 字幕樣式</div>
-                    <button class="btn" id="chPanelToggleBtn" onclick="toggleChapterPanel()" style="padding:3px 8px;font-size:11px;opacity:0.55;" title="顯示章節面板"><i class="fas fa-list-check"></i> 章節</button>
-                </div>
+                <div class="c-ttl" style="margin-bottom:13px;"><i class="fas fa-palette"></i> 字幕樣式</div>
                 <div style="margin-bottom:11px;">
                     <label class="fl">字體</label>
                     <select class="fs" id="subFont" onchange="applySubStyle()">
@@ -2594,8 +2595,17 @@ function pickFile(file) {
         currentFile=null; updateStartBtn(); return;
     }
     currentFile=file;
-    // 直接使用 File API 提供的原始檔名（已由瀏覽器解碼，不需再次 decodeURIComponent）
-    const displayName = file.name;
+    // ── 新檔案選取：立即同步檔名至逐字稿名稱欄位 ──
+    // 重置專案 ID，讓 autoSaveProject 以新檔名建立新專案（不沿用舊專案名）
+    currentProjectId = null;
+    // NFC 正規化處理 macOS HFS+ 可能的 NFD 組字差異
+    const rawFName = (file.name || '').normalize('NFC');
+    const newProjName = rawFName.replace(/\.[a-zA-Z0-9]{1,8}$/, '').trim() || '未命名錄音';
+    currentProjectName = newProjName;
+    const trInEl = document.getElementById('trNameInput');
+    if (trInEl) trInEl.value = currentProjectName;
+
+    const displayName = rawFName;
     const fnEl = document.getElementById('fileNameDisplay');
     fnEl.textContent = displayName;
     fnEl.title = displayName;
@@ -2832,7 +2842,7 @@ async function runGeminiTranscription(model, lt) {
     const wantCC = document.getElementById('enableContextualCorrection')?.checked;
     const ccRule = wantCC ? '\n【情境修正】依受訪者背景、語境主題（科技/政治/醫療/財經/娛樂等）自動修正同音異字為正確的專有名詞、政治人物姓名、企業品牌名。' : '';
 
-    const prompt = `你是頂尖專業語音辨識與逐字稿 AI，擁有超強的聽音辨字、語意理解與專業術語識別能力。任務是精確、完整地還原音訊中每一個字。${twRule}${ccRule}
+    const prompt = `你是世界頂尖的專業語音辨識 AI，擁有超強聽音辨字、語意理解與專業術語識別能力，轉錄精確度要求達到 99%。任務是精確、完整地還原音訊中每一個字。${twRule}${ccRule}
 
 【核心轉錄規則】
 1. 語言：${langName}。每段最多 ${maxCh} 字，依自然語意停頓斷句，句子務必完整，不可在語意中間截斷。
@@ -2849,7 +2859,7 @@ async function runGeminiTranscription(model, lt) {
 10. 數字與單位：正確識別數字（阿拉伯數字或中文數字）及計量單位，保持與說話者原文一致。
 
 【輸出規格】
-11. 時間戳記：${wantTime ? '精確至毫秒，格式 HH:MM:SS,mmm（例 00:00:05,240）；每段 start/end 必須填寫，不可為空。' : 'start 與 end 填空字串 ""。'}
+11. 時間戳記：${wantTime ? '【極重要】精確至毫秒，格式必須嚴格為 HH:MM:SS,mmm（例 00:00:05,240、00:15:30,500）。規則：①時間必須嚴格遞增，不可跳躍或倒退；②每段時長合理（0.3～60 秒），不可為零或負數；③所有時間戳記必須在音訊實際時長範圍內；④不可省略小時欄位（不合格：5:30,000 → 應寫 00:05:30,000）。' : 'start 與 end 填空字串 ""。'}
 12. 說話者：${wantDiar ? '依聲音音色、語氣、節奏區分不同說話者，標記 Speaker A / Speaker B 等，同一人在全篇必須使用相同標記。' : 'speaker 填空字串 ""。'}
 13. 章節：${wantChap ? '依內容主題語義變化自動分章，time 格式 MM:SS，title 以 5 字以內精準描述章節主題。' : 'chapters 輸出空陣列 []。'}
 14. 輸出格式：純 JSON，禁止包含任何 markdown、程式碼區塊符號（\`\`\`）或額外說明文字。
@@ -2857,8 +2867,7 @@ async function runGeminiTranscription(model, lt) {
 輸出格式範例：
 {"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容文字"}],"chapters":[]}`;
 
-    // Gemini 2.5 支援 thinkingConfig；音訊轉錄為確定性任務，停用思考（thinkingBudget:0）
-    // 以加快回應速度，thinkingConfig 必須放在 generationConfig 內部
+    // Gemini 2.5 支援 thinkingConfig；啟用自動思考（thinkingBudget:-1）以最大化辨識準確度
     const isThinkingModel = model.includes('2.5');
     const payload = {
         contents: [{ parts: [{ text: prompt }, audioPart] }],
@@ -2867,7 +2876,7 @@ async function runGeminiTranscription(model, lt) {
             maxOutputTokens: 65536,
             responseMimeType: 'application/json',
             ...(isThinkingModel && {
-                thinkingConfig: { thinkingBudget: 0 } // 0 = 停用思考，轉錄任務速度優先
+                thinkingConfig: { thinkingBudget: -1 } // -1 = 自動思考，最高辨識精度
             })
         }
     };
@@ -3287,6 +3296,44 @@ function sanitizeResult(result, langCode, maxCh) {
         }
         result.transcript = expanded;
     }
+
+    // ── 時間戳一致性校正（修復 AI 輸出的幻覺時間戳）──
+    // 只在音訊長度已知且有效時執行（通常在 Gemini 轉錄後）
+    if (audioDuration > 30 && result.transcript.length > 0) {
+        const secsArr = result.transcript.map(l => ({
+            s: srtToSecs(l.start || ''),
+            e: srtToSecs(l.end || l.start || '')
+        }));
+        const maxSec = secsArr.reduce((m, t) => Math.max(m, t.e), 0);
+        if (maxSec > audioDuration * 1.5) {
+            // 時間戳嚴重超出音訊長度 → 按比例修正
+            const badIdx = secsArr.findIndex(t => t.s >= audioDuration);
+            if (badIdx === 0) {
+                const n = secsArr.length;
+                secsArr.forEach((t, i) => { t.s = (i / n) * audioDuration; t.e = ((i + 1) / n) * audioDuration; });
+            } else if (badIdx > 0) {
+                const goodEnd = secsArr[badIdx - 1].e;
+                const badMin = secsArr[badIdx].s;
+                const badMax = secsArr.reduce((m, t, i) => i >= badIdx ? Math.max(m, t.e) : m, badMin);
+                const badRange = badMax - badMin;
+                const targetRange = audioDuration - goodEnd;
+                if (badRange > 0 && targetRange > 0) {
+                    secsArr.forEach((t, i) => {
+                        if (i >= badIdx) {
+                            t.s = goodEnd + ((t.s - badMin) / badRange) * targetRange;
+                            t.e = goodEnd + ((t.e - badMin) / badRange) * targetRange;
+                        }
+                    });
+                }
+            }
+            // 寫回字串格式
+            result.transcript.forEach((l, i) => {
+                l.start = secsToSRT(Math.max(0, secsArr[i].s));
+                l.end   = secsToSRT(Math.min(audioDuration, secsArr[i].e));
+            });
+        }
+    }
+
     return result;
 }
 
@@ -5897,6 +5944,45 @@ async function exportSRT() {
 
     // ── Step 2：依時間排序
     lines.sort((a, b) => a.start - b.start);
+
+    // ── Step 2.5：智慧時間戳校正（修復 AI 幻覺導致的時間戳異常）──
+    // 常見問題：Gemini 以 HH:MM:SS 格式輸出但值域錯誤（如 32 分鐘音訊卻輸出 32 小時的戳記）
+    if (audioDuration > 30 && lines.length > 0) {
+        const maxTs = lines.reduce((m, l) => Math.max(m, l.end), 0);
+        if (maxTs > audioDuration * 1.5) {
+            // 找到第一個超出音訊長度的條目索引
+            const badIdx = lines.findIndex(l => l.start >= audioDuration);
+            if (badIdx === 0) {
+                // 全部條目都超出 → 均勻分配至整個音訊範圍
+                const n = lines.length;
+                lines.forEach((l, i) => { l.start = (i / n) * audioDuration; l.end = ((i + 1) / n) * audioDuration; });
+                toast('⚠ AI 時間戳全部異常，已均勻重新分配至音訊長度', 'warn');
+            } else if (badIdx > 0) {
+                // 部分條目正確，其餘超出 → 只對超出部分按比例重新映射
+                const goodEndSec = lines[badIdx - 1].end;
+                const bad = lines.slice(badIdx);
+                const badMin = bad[0].start;
+                const badMax = bad.reduce((m, l) => Math.max(m, l.end), badMin);
+                const badRange = badMax - badMin;
+                const targetRange = audioDuration - goodEndSec;
+                if (badRange > 0 && targetRange > 0) {
+                    bad.forEach(l => {
+                        l.start = goodEndSec + ((l.start - badMin) / badRange) * targetRange;
+                        l.end   = goodEndSec + ((l.end   - badMin) / badRange) * targetRange;
+                    });
+                    toast(`⚠ 偵測到 ${bad.length} 段時間戳異常（AI 幻覺），已按比例校正至正確時間範圍`, 'warn');
+                }
+            } else {
+                // badIdx === -1，全部都在範圍內但 maxTs > audioDuration*1.5 ← 不應發生，安全截斷
+                lines.forEach(l => { l.end = Math.min(l.end, audioDuration); });
+            }
+        }
+    }
+    // 移除完全超出音訊範圍的條目，截斷結尾超出部分
+    if (audioDuration > 0) {
+        lines = lines.filter(l => l.start < audioDuration);
+        lines.forEach(l => { l.end = Math.min(l.end, audioDuration); });
+    }
 
     // ── Step 3：最小持續時間保護（每段至少 0.1 秒）
     const MIN_DUR = 0.1;
