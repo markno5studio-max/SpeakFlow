@@ -216,6 +216,13 @@ mark.pn.nr{background:rgba(61,212,154,.13);color:#3dd49a;border-bottom-color:#3d
 .repl-arrow{color:var(--text-tertiary);font-size:13px;flex-shrink:0;}
 .repl-del{background:none;border:none;color:var(--text-tertiary);cursor:pointer;font-size:11px;padding:3px 7px;border-radius:4px;transition:var(--t);}
 .repl-del:hover{color:var(--accent-red);background:rgba(240,96,96,.1);}
+/* SRT 格式選擇卡片 */
+.srt-fmt-card{display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border:1.5px solid var(--border);border-radius:var(--r-md);cursor:pointer;transition:var(--t);margin-bottom:10px;}
+.srt-fmt-card:hover{border-color:var(--primary);background:rgba(139,92,246,.07);}
+.srt-fmt-card:last-of-type{margin-bottom:0;}
+.srt-fmt-icon{width:38px;height:38px;border-radius:var(--r-sm);background:var(--bg-surface);display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--primary);flex-shrink:0;}
+.srt-fmt-ttl{font-size:13.5px;font-weight:700;margin-bottom:4px;}
+.srt-fmt-desc{font-size:11.5px;color:var(--text-secondary);line-height:1.6;}
 
 /* ─── MODALS ─── */
 /* 所有 overlay modal 的 z-index 必須高於側欄頁尾（100000），以確保蓋在上方 */
@@ -667,6 +674,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                 <label class="tog"><input type="checkbox" id="enableFatHighlight" checked><span class="td"></span>FatHighlight 標記</label>
                 <label class="tog" title="AI 依語境自動修正同音字為正確的專有名詞、人名（Gemini 模型）"><input type="checkbox" id="enableContextualCorrection"><span class="td"></span>情境修正</label>
                 <label class="tog" title="轉錄完成後自動翻譯為另一種語言，雙語對照顯示"><input type="checkbox" id="enableBilingual" onchange="onBilingualToggle()"><span class="td"></span>雙語翻譯</label>
+                <label class="tog" title="匯出 SRT 時，每段字幕結尾自動延伸至下一段起始，消除空白間隙（適合剪輯軟體連續字幕）"><input type="checkbox" id="enableEndExtend"><span class="td"></span>延伸字幕</label>
             </div>
             <!-- 雙語翻譯目標語言選擇 -->
             <div id="bilingualSection" style="display:none;margin-top:8px;">
@@ -883,7 +891,7 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                             <button onclick="adjustTranscriptFontSize(2)" title="放大文字" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;padding:2px 5px;font-size:15px;font-weight:700;line-height:1;">A+</button>
                         </div>
                         <button class="btn" onclick="exportTXT()"><i class="fas fa-file-lines"></i> TXT</button>
-                        <button class="btn btn-p" onclick="exportSRT()"><i class="fas fa-closed-captioning"></i> SRT</button>
+                        <button class="btn btn-p" onclick="exportSRT()" title="匯出 SRT / ASS 字幕檔"><i class="fas fa-closed-captioning"></i> SRT</button>
                     </div>
                 </div>
                 <!-- 尋找 / 取代 -->
@@ -1021,6 +1029,35 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
 </main>
 </div>
 
+<!-- ═══ SRT 格式選擇 MODAL ═══ -->
+<div class="overlay" id="srtFormatModal">
+    <div class="mbox md">
+        <div class="m-hd">
+            <div class="m-ttl"><i class="fas fa-closed-captioning" style="color:var(--primary);margin-right:7px;"></i>匯出字幕</div>
+            <button class="m-close" onclick="closeModal('srtFormatModal')"><i class="fas fa-times"></i></button>
+        </div>
+        <p style="font-size:12.5px;color:var(--text-secondary);margin-bottom:16px;">請選擇字幕檔案格式：</p>
+        <div class="srt-fmt-card" onclick="doExportSRT('srt')">
+            <div class="srt-fmt-icon"><i class="fas fa-file-lines"></i></div>
+            <div>
+                <div class="srt-fmt-ttl">純文字 SRT（標準）</div>
+                <div class="srt-fmt-desc">業界標準格式，相容 Final Cut Pro、Premiere Pro、DaVinci Resolve 等所有專業剪輯軟體。字幕外觀（含背景色）由軟體設定控制。</div>
+            </div>
+        </div>
+        <div class="srt-fmt-card" onclick="doExportSRT('ass')">
+            <div class="srt-fmt-icon"><i class="fas fa-fill-drip"></i></div>
+            <div>
+                <div class="srt-fmt-ttl">ASS 無黑底字幕</div>
+                <div class="srt-fmt-desc">進階字幕格式，白色文字加黑邊輪廓，無黑底方塊。適用於 DaVinci Resolve、VLC、mpv 等支援 ASS 的播放器與軟體。</div>
+            </div>
+        </div>
+        <p style="font-size:11px;color:var(--text-tertiary);margin-top:14px;line-height:1.7;">
+            <i class="fas fa-circle-info" style="margin-right:4px;"></i>
+            <strong>關於 FCP 黑底：</strong>Final Cut Pro 字幕軌預設顯示黑底，這是 FCP 的字幕渲染設定，非由 SRT 檔案控制。可在 FCP「字幕角色」中修改樣式。
+        </p>
+    </div>
+</div>
+
 <!-- ═══ LOADING MODAL ═══ -->
 <div class="overlay" id="loadingModal">
     <div class="mbox sm load-body">
@@ -1082,6 +1119,15 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                         </select>
                         <p style="font-size:11px;color:var(--text-tertiary);margin-top:4px;">也可隨時手動點擊「登出管理員」。</p>
                     </div>
+                </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">字幕預設行為</div>
+                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+                        <input type="checkbox" id="sEndExtend" style="width:16px;height:16px;cursor:pointer;">
+                        <span>預設啟用「延伸字幕」（每段字幕結尾延伸至下一段起始，消除空白間隙）</span>
+                    </label>
+                    <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">此為全站預設值，使用者可在個人偏好設定中個別覆蓋。</p>
                 </div>
             </div>
 
@@ -1451,6 +1497,15 @@ mark.fnd.cur{background:rgba(255,140,20,.8);color:#fff;}
                     </select>
                     <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">登出後需重新以 Google/Facebook 帳號登入。</p>
                 </div>
+                <hr class="divider">
+                <div class="s-sec">
+                    <div class="s-lbl">字幕匯出行為</div>
+                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+                        <input type="checkbox" id="sPrefsEndExtend" style="width:16px;height:16px;cursor:pointer;">
+                        <span>啟用「延伸字幕」（每段字幕結尾延伸至下一段起始，消除空白間隙）</span>
+                    </label>
+                    <p style="font-size:11px;color:var(--text-tertiary);margin-top:5px;">適合剪輯軟體連續字幕，FCP / Premiere / Resolve 匯入後字幕之間無黑畫面。</p>
+                </div>
                 <div style="display:flex;gap:8px;margin-top:16px;">
                     <button class="btn btn-p btn-full" onclick="saveUserPrefs()"><i class="fas fa-floppy-disk"></i> 儲存偏好設定</button>
                 </div>
@@ -1814,6 +1869,13 @@ function applyUserPreferences() {
         if (fpsSel) fpsSel.value = String(tcFps);
     }
     applyColors(); // re-apply colours with user-specific overrides
+    // 延伸字幕：per-user pref > global admin default
+    const endExtendVal = gup('endExtend');
+    const extEl = document.getElementById('enableEndExtend');
+    if (extEl) {
+        if (endExtendVal !== null && endExtendVal !== '') extEl.checked = endExtendVal === 'true';
+        else extEl.checked = gs('endExtend') === 'true'; // global admin default
+    }
 }
 
 function applySiteInfo() {
@@ -2554,6 +2616,18 @@ function toB64(file){ return new Promise((res,rej)=>{ const r=new FileReader(); 
 // ══════════════════════════════════════════
 // 轉錄主流程
 // ══════════════════════════════════════════
+// 通用延遲 helper（毫秒）
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Gemini 429 Rate Limit 錯誤訊息（依模型區分）
+function gemini429Msg(model) {
+    const isFlash = model && model.toLowerCase().includes('flash');
+    if (isFlash) {
+        return 'Gemini Flash API 達到速率上限（429）。\n\n原因：免費版每分鐘限 15 次請求、每天限 1,500 次。\n\n解決方法：\n① 程式將自動倒數 60 秒後重試（請稍候）\n② 若持續發生，請稍候幾分鐘後再試\n③ 升級至 Google AI Studio 付費方案可大幅提升配額';
+    }
+    return 'Gemini Pro API 達到速率上限（429）。\n\n原因：Pro 免費版配額極低（每分鐘 2 次）。\n\n解決方法：\n① 程式將自動倒數 60 秒後重試（請稍候）\n② 改用「Gemini 2.5 Flash」模型（免費配額充足）\n③ 升級至付費方案';
+}
+
 async function startTranscription() {
     if(!currentFile) return;
     const model = document.getElementById('modelSelect').value;
@@ -2568,7 +2642,25 @@ async function startTranscription() {
         } else if (model === 'openai-whisper-1') {
             await runOpenAITranscription(lt);
         } else {
-            await runGeminiTranscription(model, lt);
+            // Gemini：對 429 Rate Limit 自動倒數重試一次
+            let geminiRetries = 1;
+            while (true) {
+                try {
+                    await runGeminiTranscription(model, lt);
+                    break;
+                } catch (e) {
+                    if (e._is429 && geminiRetries > 0) {
+                        geminiRetries--;
+                        for (let s = 60; s > 0; s--) {
+                            lt.textContent = `API 配額暫時用盡，${s} 秒後自動重試...`;
+                            await sleep(1000);
+                        }
+                        lt.textContent = '自動重試中...';
+                        continue;
+                    }
+                    throw e;
+                }
+            }
         }
         finishTranscription();
         // 雙語翻譯（轉錄完成後自動觸發）
@@ -2754,7 +2846,7 @@ async function runGeminiTranscription(model, lt) {
         if (!sseResp.ok) {
             const eb = await sseResp.json().catch(() => ({}));
             const c = eb?.error?.code || sseResp.status;
-            if (c === 429) throw new Error('API 呼叫達上限（429 Rate Limit）。\n\n可能原因：\n① Gemini 2.5 Pro 需要付費方案（免費方案額度極低）\n② 請改用「Gemini 2.5 Flash」模型（速度更快、免費額度充足）\n③ 若已付費，請稍候 1 分鐘後重試。');
+            if (c === 429) { const e = new Error(gemini429Msg(model)); e._is429 = true; throw e; }
             if (c === 403) throw new Error('API 金鑰無效或無存取權限（403）。請至後台設定確認 Gemini API 金鑰。');
             throw new Error(eb?.error?.message || `HTTP ${sseResp.status}`);
         }
@@ -2774,7 +2866,7 @@ async function runGeminiTranscription(model, lt) {
                 try {
                     const chunk = JSON.parse(d);
                     if (chunk.error) {
-                        if (chunk.error.code === 429) throw new Error('API 呼叫達上限（Rate Limit）。請改用 Gemini 2.5 Flash 或稍候重試。');
+                        if (chunk.error.code === 429) { const e = new Error(gemini429Msg(model)); e._is429 = true; throw e; }
                         throw new Error(chunk.error.message);
                     }
                     const part = chunk.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -2790,7 +2882,7 @@ async function runGeminiTranscription(model, lt) {
         }
     } catch(streamErr) {
         // 串流失敗 → 降級至標準（非串流）API
-        if (streamErr.message && (streamErr.message.includes('API 呼叫達上限') || streamErr.message.includes('403'))) throw streamErr;
+        if (streamErr._is429 || streamErr.message?.includes('403')) throw streamErr;
         lt.textContent = `串流失敗，改用標準 API 重試（${streamErr.message?.slice(0,40) || ''}）...`;
         const stdResp = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -2799,7 +2891,7 @@ async function runGeminiTranscription(model, lt) {
         if (!stdResp.ok) {
             const eb = await stdResp.json().catch(() => ({}));
             const c = eb?.error?.code || stdResp.status;
-            if (c === 429) throw new Error('API 呼叫達上限（429 Rate Limit）。請改用 Gemini 2.5 Flash 模型，或稍候重試。');
+            if (c === 429) { const e = new Error(gemini429Msg(model)); e._is429 = true; throw e; }
             if (c === 403) throw new Error('API 金鑰無效（403）。請至後台設定確認 Gemini API 金鑰。');
             throw new Error(eb?.error?.message || `HTTP ${stdResp.status}`);
         }
@@ -4604,6 +4696,9 @@ function openSettings() {
     document.getElementById('sNewPass').value = gs('adminPass') || '';
     const sast = document.getElementById('sAdminSessionTimeout');
     if (sast) sast.value = gs('adminSessionHours') || '24';
+    // 全站預設：延伸字幕
+    const seeEl = document.getElementById('sEndExtend');
+    if (seeEl) seeEl.checked = gs('endExtend') === 'true';
     document.getElementById('sModelSize').value=gs('modelSize');
     const stcf = document.getElementById('sTCFormat');
     if (stcf) stcf.value = localStorage.getItem('vf_tc_format') || '8';
@@ -4681,6 +4776,9 @@ function saveSettings() {
     // 管理員 session 時效
     const sast = document.getElementById('sAdminSessionTimeout');
     if (sast) ss('adminSessionHours', sast.value);
+    // 全站預設：延伸字幕
+    const seeEl = document.getElementById('sEndExtend');
+    if (seeEl) ss('endExtend', seeEl.checked ? 'true' : 'false');
     // TC format
     const stcf = document.getElementById('sTCFormat');
     if (stcf) {
@@ -4747,6 +4845,12 @@ function openUserSettings() {
             sto.value = (saved !== null) ? saved : '0';
         }
     }
+    // Load end-extend pref
+    const spee = document.getElementById('sPrefsEndExtend');
+    if (spee) {
+        const saved = gup('endExtend');
+        spee.checked = (saved !== null && saved !== '') ? saved === 'true' : gs('endExtend') === 'true';
+    }
     // Sync colour pickers with per-user values (gup falls back to global if no override)
     document.querySelectorAll('.cpw[data-key]').forEach(cpw => syncCPW(cpw, gup(cpw.dataset.key)));
     // Set modal title
@@ -4794,6 +4898,14 @@ function saveUserPrefs() {
             localStorage.setItem('vf_sess_pref_' + hash, sto.value); // 直接存原始字串（-2, 0, 正數）
             applyRememberPreference(u);
         }
+    }
+    // ── 延伸字幕 ── (per-user)
+    const spee = document.getElementById('sPrefsEndExtend');
+    if (spee) {
+        sup('endExtend', spee.checked ? 'true' : 'false');
+        // 同步更新轉錄頁的 opt-strip 開關
+        const extEl = document.getElementById('enableEndExtend');
+        if (extEl) extEl.checked = spee.checked;
     }
     // ── Colors ── (writes to vf_upref_{hash}_color_*, NEVER to global vf_color_*)
     document.querySelectorAll('.cpw[data-key]').forEach(cpw => {
@@ -5678,10 +5790,13 @@ function secsToSRTTime(t) {
     const ms = Math.floor((t % 1) * 1000);
     return `${p2(hh)}:${p2(mm)}:${p2(ss)},${String(ms).padStart(3,'0')}`;
 }
+// ── 字幕匯出系統 ──────────────────────────────────────────────
+let _srtLines = null; // 準備好的字幕行（exportSRT 設定，doExportSRT 使用）
+
 async function exportSRT() {
     if (!parsedResult?.transcript) { toast('無轉錄結果', 'err'); return; }
 
-    // ── Step 1：套用 maxChars 分割（與 renderResults 相同邏輯，但時間碼按比例分配）
+    // ── Step 1：套用 maxChars 分割
     const maxC = parseInt(document.getElementById('maxChars')?.value || 0);
     let lines = parsedResult.transcript.filter(l => l.text?.trim());
     if (maxC > 0) {
@@ -5695,7 +5810,7 @@ async function exportSRT() {
                 const n      = parts.length;
                 parts.forEach((part, pi) => expanded.push({
                     ...line,
-                    start: startS + (pi / n) * dur,     // 秒數，待 Step 3 格式化
+                    start: startS + (pi / n) * dur,
                     end:   startS + ((pi + 1) / n) * dur,
                     text:  part.trim()
                 }));
@@ -5705,67 +5820,115 @@ async function exportSRT() {
         }
         lines = expanded;
     } else {
-        // 統一轉為秒數
         lines = lines.map(l => ({ ...l, start: srtToSecs(l.start||''), end: srtToSecs(l.end||l.start||'') }));
     }
 
-    // ── Step 2：確保時間軸遞增（去除 start 早於前一段 end 的無效段落）
+    // ── Step 2：依時間排序
     lines.sort((a, b) => a.start - b.start);
 
     // ── Step 3：最小持續時間保護（每段至少 0.1 秒）
     const MIN_DUR = 0.1;
     lines.forEach(l => { if (l.end <= l.start) l.end = l.start + MIN_DUR; });
 
-    // ── Step 4：防重疊保護（用戶確認有效的邏輯，加上最小 0.05 秒 gap）
+    // ── Step 3.5：延伸字幕模式（消除空白間隙）──
+    const doExtend = document.getElementById('enableEndExtend')?.checked;
+    if (doExtend) {
+        for (let i = 0; i < lines.length - 1; i++) {
+            lines[i].end = lines[i + 1].start; // 結尾延伸至下一段起始
+        }
+    }
+
+    // ── Step 4：防重疊保護（延伸模式下不需要，但保留以防邊界情況）
     for (let i = 0; i < lines.length - 1; i++) {
         if (lines[i].end > lines[i + 1].start) {
-            lines[i].end = Math.max(lines[i].start + MIN_DUR, lines[i + 1].start - 0.05);
+            lines[i].end = Math.max(lines[i].start + MIN_DUR, lines[i + 1].start - (doExtend ? 0 : 0.05));
         }
     }
 
-    // ── Step 5：格式化並輸出 SRT（無 BOM UTF-8 + CRLF）
-    let srtLines = [];
-    let seq = 1;
-    lines.forEach(l => {
-        if (!l.text?.trim()) return;
-        const startStr = secsToSRTTime(l.start);
-        const endStr   = secsToSRTTime(l.end);
-        srtLines.push(`${seq}\r\n${startStr} --> ${endStr}\r\n${l.text.trim()}\r\n`);
-        seq++;
-    });
-    if (!srtLines.length) { toast('沒有可匯出的字幕段落', 'err'); return; }
+    if (!lines.filter(l => l.text?.trim()).length) { toast('沒有可匯出的字幕段落', 'err'); return; }
 
-    // 無 BOM UTF-8 + CRLF — FCP / Resolve / Premiere 標準相容（BOM 會導致 FCP 拒絕匯入）
-    const srtContent = srtLines.join('\r\n') + '\r\n';
-    const fname = safeFilename(currentProjectName) + '.srt';
+    _srtLines = lines; // 暫存供 doExportSRT 使用
+    document.getElementById('srtFormatModal').classList.add('show');
+}
 
-    // ── 優先使用 File System Access API（不觸發 macOS quarantine 警告）──
+async function doExportSRT(format) {
+    closeModal('srtFormatModal');
+    if (!_srtLines?.length) { toast('無字幕資料，請重新點擊 SRT 按鈕', 'err'); return; }
+    const lines = _srtLines;
+    const baseName = safeFilename(currentProjectName || 'transcript');
+
+    if (format === 'ass') {
+        // ASS 格式：無黑底方塊，白字黑邊輪廓
+        const assContent = buildASSContent(lines);
+        await saveSubtitleFile(baseName + '.ass', assContent, '.ass');
+        toast('ASS 無黑底字幕已匯出 ✓', 'ok');
+    } else {
+        // 標準純文字 SRT（無 BOM UTF-8 + CRLF）
+        let blocks = [];
+        let seq = 1;
+        lines.forEach(l => {
+            if (!l.text?.trim()) return;
+            const txt = l.text.trim().replace(/<[^>]+>/g, ''); // 去除 HTML 標記，確保純文字
+            blocks.push(`${seq}\r\n${secsToSRTTime(l.start)} --> ${secsToSRTTime(l.end)}\r\n${txt}\r\n`);
+            seq++;
+        });
+        if (!blocks.length) { toast('沒有可匯出的字幕段落', 'err'); return; }
+        const srtContent = blocks.join('\r\n') + '\r\n';
+        await saveSubtitleFile(baseName + '.srt', srtContent, '.srt');
+        toast('SRT 已匯出 ✓', 'ok');
+    }
+}
+
+function buildASSContent(lines) {
+    // ASS 格式：BorderStyle:1 = 文字輪廓（無黑底方塊）
+    const hdr = `[Script Info]\nTitle: Subtitle Export\nScriptType: v4.00+\nCollisions: Normal\nPlayDepth: 0\nTimer: 100.0000\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,52,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,3,0,2,10,10,30,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n`;
+    function t2ass(s) {
+        const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), ss=Math.floor(s%60), cs=Math.floor((s%1)*100);
+        return `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
+    }
+    const events = lines.filter(l=>l.text?.trim()).map(l => {
+        const txt = l.text.trim().replace(/<[^>]+>/g,'');
+        return `Dialogue: 0,${t2ass(l.start)},${t2ass(l.end)},Default,,0,0,0,,${txt}`;
+    }).join('\n');
+    return hdr + events + '\n';
+}
+
+async function saveSubtitleFile(fname, content, ext) {
+    // ── 優先：File System Access API（macOS 不觸發 quarantine 警告）──
     if (window.showSaveFilePicker) {
         try {
+            const extLabel = ext === '.srt' ? 'SubRip Subtitle' : 'Advanced SubStation Alpha';
             const handle = await window.showSaveFilePicker({
                 suggestedName: fname,
-                types: [{ description: 'SubRip Subtitle (.srt)', accept: { 'text/plain': ['.srt'] } }]
+                types: [{ description: `${extLabel} (*${ext})`, accept: { 'text/plain': [ext] } }]
             });
             const writable = await handle.createWritable();
-            await writable.write(new Blob([srtContent], { type: 'text/plain;charset=utf-8' }));
+            // 無 BOM UTF-8（FCP 不接受 BOM）
+            const enc = new TextEncoder();
+            await writable.write(enc.encode(content));
             await writable.close();
-            toast('SRT 已儲存 ✓（系統對話框，無防毒警告）', 'ok');
             return;
         } catch(e) {
-            if (e.name === 'AbortError') return; // 使用者取消，靜默退出
-            // 其他錯誤降級至 blob 下載
+            if (e.name === 'AbortError') return; // 使用者取消
+            console.warn('[saveSubtitleFile] showSaveFilePicker 失敗，降級至 blob 下載:', e.name, e.message);
         }
     }
 
-    // ── 降級：blob 下載（Safari / Firefox）──
-    const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+    // ── 降級：blob 下載（Safari / Firefox / 舊版）──
+    // macOS 可能將下載檔案標記 quarantine，導致無法直接開啟
+    // 解決方式：在 Finder 按住 Control 點擊檔案 → 選擇「打開」，或：
+    // 在「終端機」執行：xattr -d com.apple.quarantine ~/Downloads/<檔案名稱>
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url; link.download = fname;
-    document.body.appendChild(link); link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast('SRT 已下載 ✓  如 Mac 顯示安全警告，請右鍵檔案 → 開啟', 'ok');
+    const a    = document.createElement('a');
+    a.href = url; a.download = fname; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+    // 若為 Mac，提示 quarantine 解法
+    const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
+    if (isMac) {
+        setTimeout(() => toast('若 Mac 顯示無法開啟，請按住 Control 點擊檔案 → 打開', 'ok'), 500);
+    }
 }
 function exportTXT() {
     const fname = safeFilename(currentProjectName) + '.txt';
