@@ -2846,24 +2846,25 @@ async function runGeminiTranscription(model, lt) {
     const prompt = `你是世界頂尖的專業語音辨識 AI，擁有超強聽音辨字、語意理解與專業術語識別能力，轉錄精確度要求達到 99%。任務是精確、完整地還原音訊中每一個字。${twRule}${ccRule}
 
 【核心轉錄規則】
-1. 語言：${langName}。每段最多 ${maxCh} 字，依自然語意停頓斷句，句子務必完整，不可在語意中間截斷。
-2. 完整逐字：一字不漏地轉錄所有可辨識的語音，保留語氣詞（嗯、啊、那個、對對對等）。
-3. 標點符號：正確加入句號、逗號、問號、驚嘆號、頓號，反映語氣與停頓。
-4. 禁止重複：絕對不得輸出相同或極度相似的句子（避免 AI 幻覺重複）。
-5. 不清楚音訊：標記 [不清楚]，切勿臆測或捏造內容。
+1. 語言：${langName}。
+2. 【分段上限 — 硬性規定，絕對不可超過】每個 transcript 條目的 text 欄位最多 ${maxCh} 個字元（中文字、英文字母、數字每個均算 1 字；此上限不可違反）。超出上限必須拆成多個 JSON 條目，各帶獨立時間戳。分段策略：優先在逗號「,，」、句號「。.」、問號「?？」、感嘆號「!！」、頓號「、」等停頓處切斷；無標點可用時在第 ${maxCh} 字強制截斷。範例（上限 20 字）："好那再來有formula但我覺得formula這種方案可以參考" → 必須拆為 3 個以上條目，不可整句放入同一條目。
+3. 完整逐字：一字不漏地轉錄所有可辨識的語音，保留語氣詞（嗯、啊、那個、對對對等）。
+4. 標點符號：正確加入句號、逗號、問號、驚嘆號、頓號，反映語氣與停頓。
+5. 禁止重複：絕對不得輸出相同或極度相似的句子（避免 AI 幻覺重複）。
+6. 不清楚音訊：標記 [不清楚]，切勿臆測或捏造內容。
 
 【專有名詞與精準辨識】
-6. 人名、地名、品牌名、產品名、公司名、組織名：依上下文推斷正確寫法，優先使用最常見的官方名稱。
-7. 專業術語：技術、醫學、法律、財務、科學、工程等領域術語，必須精確辨識，不可用通用詞替代。
-8. 形容詞與副詞：仔細辨識程度副詞（非常、極度、稍微等）及形容詞，不可省略或混淆。
-9. 同音字辨義：根據上下文語意選擇正確的同音字（例：「機器」vs「幾期」、「一致」vs「異質」）。
-10. 數字與單位：正確識別數字（阿拉伯數字或中文數字）及計量單位，保持與說話者原文一致。
+7. 人名、地名、品牌名、產品名、公司名、組織名：依上下文推斷正確寫法，優先使用最常見的官方名稱。
+8. 專業術語：技術、醫學、法律、財務、科學、工程等領域術語，必須精確辨識，不可用通用詞替代。
+9. 形容詞與副詞：仔細辨識程度副詞（非常、極度、稍微等）及形容詞，不可省略或混淆。
+10. 同音字辨義：根據上下文語意選擇正確的同音字（例：「機器」vs「幾期」、「一致」vs「異質」）。
+11. 數字與單位：正確識別數字（阿拉伯數字或中文數字）及計量單位，保持與說話者原文一致。
 
 【輸出規格】
-11. 時間戳記：${wantTime ? '【極重要】精確至毫秒，格式必須嚴格為 HH:MM:SS,mmm（例 00:00:05,240、00:15:30,500）。規則：①時間必須嚴格遞增，不可跳躍或倒退；②每段時長合理（0.3～60 秒），不可為零或負數；③所有時間戳記必須在音訊實際時長範圍內；④不可省略小時欄位（不合格：5:30,000 → 應寫 00:05:30,000）。' : 'start 與 end 填空字串 ""。'}
-12. 說話者：${wantDiar ? '依聲音音色、語氣、節奏區分不同說話者，標記 Speaker A / Speaker B 等，同一人在全篇必須使用相同標記。' : 'speaker 填空字串 ""。'}
-13. 章節：${wantChap ? '依內容主題語義變化自動分章，time 格式 MM:SS，title 以 5 字以內精準描述章節主題。' : 'chapters 輸出空陣列 []。'}
-14. 輸出格式：純 JSON，禁止包含任何 markdown、程式碼區塊符號（\`\`\`）或額外說明文字。
+12. 時間戳記：${wantTime ? '【極重要】精確至毫秒，格式必須嚴格為 HH:MM:SS,mmm（例 00:00:05,240、00:15:30,500）。規則：①時間必須嚴格遞增，不可跳躍或倒退；②每段時長合理（0.3～60 秒），不可為零或負數；③所有時間戳記必須在音訊實際時長範圍內；④不可省略小時欄位（不合格：5:30,000 → 應寫 00:05:30,000）。' : 'start 與 end 填空字串 ""。'}
+13. 說話者：${wantDiar ? '依聲音音色、語氣、節奏區分不同說話者，標記 Speaker A / Speaker B 等，同一人在全篇必須使用相同標記。' : 'speaker 填空字串 ""。'}
+14. 章節：${wantChap ? '依內容主題語義變化自動分章，time 格式 MM:SS，title 以 5 字以內精準描述章節主題。' : 'chapters 輸出空陣列 []。'}
+15. 輸出格式：純 JSON，禁止包含任何 markdown、程式碼區塊符號（\`\`\`）或額外說明文字。
 
 輸出格式範例：
 {"transcript":[{"start":"00:00:01,000","end":"00:00:04,500","speaker":"","text":"內容文字"}],"chapters":[]}`;
@@ -3198,34 +3199,44 @@ function convertAllToTraditional() {
     toast('已轉換為台灣繁體中文', 'ok');
 }
 
-// 將長文字按語意分割成不超過 maxC 字的片段
+// 將長文字依字數上限切成多段（貪婪逐字掃描，優先在標點符號斷句）
+// 演算法：逐字累積至 maxC 字時，回溯到最近的標點斷行；無標點則強制截斷。
+// 計算方式：去除空白後的字元數（中文字、英文字母、數字皆各算 1 字）。
 function splitLongText(text, maxC) {
-    if (!text || text.length <= maxC) return [text];
-    const chunks = [];
-    // 優先在標點符號處斷行
-    const puncts = /[，。！？、；,!?;]/g;
-    let last = 0;
-    let m;
-    while ((m = puncts.exec(text)) !== null) {
-        if (m.index + 1 - last >= maxC) {
-            // 超過 maxC，強制在此斷
-            chunks.push(text.slice(last, m.index + 1).trim());
-            last = m.index + 1;
-        }
-    }
-    // 剩餘文字
-    if (last < text.length) {
-        const remain = text.slice(last);
-        // 若剩餘仍超過 maxC，強制按字數切
-        if (remain.length > maxC) {
-            for (let i = 0; i < remain.length; i += maxC) {
-                chunks.push(remain.slice(i, i + maxC).trim());
+    if (!text) return [''];
+    const noSp = (s) => (s || '').replace(/\s/g, '');
+    if (noSp(text).length <= maxC) return [text];
+
+    const segs = [];
+    const brkChars = new Set('，。！？、；…,!?;');
+    let buf = '', bufLen = 0;
+    let lbIdx = -1, lbBuf = '', lbLen = 0; // 最近一個標點的位置快照
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        buf += ch;
+        if (!/\s/.test(ch)) bufLen++;
+
+        // 記錄最近一次標點符號的斷行快照
+        if (brkChars.has(ch)) { lbIdx = i; lbBuf = buf; lbLen = bufLen; }
+
+        if (bufLen >= maxC) {
+            if (lbIdx >= 0) {
+                // ① 在最近標點符號後斷行（保留標點於前段）
+                segs.push(lbBuf.trim());
+                buf = text.slice(lbIdx + 1, i + 1); // 標點後 → 當前字（含）
+                bufLen = noSp(buf).length;
+                lbIdx = -1; lbBuf = ''; lbLen = 0;
+            } else {
+                // ② 無標點可用，強制在此截斷
+                segs.push(buf.trim());
+                buf = ''; bufLen = 0;
+                lbIdx = -1; lbBuf = ''; lbLen = 0;
             }
-        } else {
-            chunks.push(remain.trim());
         }
     }
-    return chunks.filter(Boolean).length ? chunks.filter(Boolean) : [text];
+    if (buf.trim()) segs.push(buf.trim());
+    return segs.filter(Boolean).length ? segs.filter(Boolean) : [text];
 }
 
 // ══════════════════════════════════════════
